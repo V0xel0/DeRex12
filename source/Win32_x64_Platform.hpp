@@ -19,7 +19,6 @@
 #endif
 #include "d3dx12.h"
 #include <dxgi1_6.h>
-#include <d3dcompiler.h>
 #include <timeapi.h>
 #pragma warning( pop )
 
@@ -31,8 +30,8 @@ namespace Win32
 {
 	struct Platform_State
 	{
-		u64 totalSize;
-		void *gameMemory;
+		u64 total_size;
+		void *memory;
 	};
 	
 	struct Platform_Clock
@@ -95,10 +94,11 @@ namespace Win32
 
 		RECT rc = { 0, 0, static_cast<LONG>(w), static_cast<LONG>(h) };
 		AdjustWindowRectEx(&rc, WS_OVERLAPPEDWINDOW, FALSE, WS_EX_APPWINDOW);
-		const s32 winStyle = WS_EX_NOREDIRECTIONBITMAP | WS_SIZEBOX | WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_OVERLAPPED | WS_SYSMENU;
-
+		const s32 winStyle = WS_SIZEBOX | WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_OVERLAPPED | WS_SYSMENU;
+		const s32 winStyleEx = WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP;
+		
 		mainWindow = CreateWindowExA(
-		    WS_EX_APPWINDOW,
+		    winStyleEx,
 			name,
 			name,
 			winStyle,
@@ -376,7 +376,7 @@ namespace Win32
 	// ================================================= DEBUG INTERNAL FUNCTIONS ====================================================
 	// ===============================================================================================================================
 #if GAME_INTERNAL
-	Debug_File_Output beug_read_file(const char *fileName)
+	Debug_File_Output debug_read_file(const char *fileName)
 	{
 		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
 		auto d = defer([&]
