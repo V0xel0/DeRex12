@@ -23,9 +23,35 @@
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\external\\D3D12\\"; }
 
-void break_if_failed(HRESULT hr)
+inline void break_if_failed(HRESULT hr)
 {
 	AlwaysAssert(SUCCEEDED(hr));
+}
+
+[[nodiscard]]
+u64 signal_and_increment(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value)
+{
+	u64 value_to_signal = ++value;
+	break_if_failed(command_queue->Signal(fence, value_to_signal));
+	return value_to_signal;
+}
+
+void wait_for_fence(ID3D12Fence* fence, u64 value_to_wait, HANDLE event)
+{
+	u64 completed_value = fence->GetCompletedValue();
+	if (completed_value < value_to_wait)
+	{
+		break_if_failed(fence->SetEventOnCompletion(value_to_wait, event));
+		WaitForSingleObject(event, INFINITE);
+	}
+}
+
+[[nodiscard]]
+u64 flush_and_increment(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value, HANDLE event)
+{
+	u64 value_to_signal = signal_and_increment(command_queue, fence, value);
+	wait_for_fence(fence, value_to_signal, event);
+	return value_to_signal;
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -79,7 +105,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	u32 current_backbuffer_i = 0;
 		
 	ID3D12Fence* fence = nullptr;
-	u64 fence_value_to_signal = 0;
+	u64 fence_value = 0;
 	u64 fence_values[count_backbuffers]{};
 	HANDLE fence_event = nullptr;
 	
@@ -263,6 +289,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			auto backbuffer = render_targets[current_backbuffer_i];
 			
 			command_allocator->Reset();
+			// Using one command list with 3 allocators (one for each backbuffer)
 			command_list->Reset(command_allocator, nullptr);
 			
 			// Clear render target
@@ -288,25 +315,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				ID3D12CommandList* const commandLists[] = { command_list };
 				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
 				
-				// Signal
-				fence_values[current_backbuffer_i] = ++fence_value_to_signal; // mysteriously this works perfectly
-				//fence_value_to_signal = ++fence_values[current_backbuffer_i]; // this does not work, WHY?!?
-				break_if_failed(command_queue->Signal(fence, fence_value_to_signal));
+				// Signal - temporary values are needed when signaling to avoid race condition, even when single CPU thread is used
+				fence_values[current_backbuffer_i] = fence_value = signal_and_increment(command_queue, fence, fence_value);
 				
 				// Present current backbuffer
 				break_if_failed(swapchain->Present(1, 0));
 				
-				// Get next backbuffer
+				// Get next backbuffer - updated on swapchain by Present()
 				current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
 				
 				// Wait for frame (n-1), so we are not waiting on 'this' frame
-				u64 completed_value = fence->GetCompletedValue();
-				if (completed_value < fence_values[current_backbuffer_i])
-				{
-					break_if_failed(fence->SetEventOnCompletion(fence_values[current_backbuffer_i], fence_event));
-					WaitForSingleObject(fence_event, INFINITE);
-				}
-				
+				wait_for_fence(fence, fence_values[current_backbuffer_i], fence_event);
 			}
 		}
 		
