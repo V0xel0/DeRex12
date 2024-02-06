@@ -135,7 +135,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			#endif
 		}
 		
-		// Factory creation
+		// Create Factory
 		break_if_failed(CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory)));
 		
 		// Query for dedicated GPU, skip software & check support for D3D12
@@ -167,13 +167,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			AlwaysAssert(adapter != nullptr && "Couldnt find dedicated GPU");
 		}
 			
-		// Device creation
+		// Create Device
 		break_if_failed(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&device)));
 		#ifdef _DEBUG
 		break_if_failed(device->QueryInterface(&debug_device));
 		#endif
 		
-		// Command Queue creation
+		// Create Command Queue
 		{
 			D3D12_COMMAND_QUEUE_DESC queue_desc 
 			{
@@ -185,7 +185,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			break_if_failed(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&command_queue)));
 		}
 		
-		// Swap chain creation
+		// Create Swap chain
 		{
 			DXGI_SWAP_CHAIN_DESC1 swapchain_desc 
 			{
@@ -209,7 +209,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			temp_swapchain->Release();
 		}
 		
-		// Descriptor heap for RTVs
+		// Create Descriptor heap for RTVs
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC rtv_desc
 			{
@@ -222,35 +222,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
 		
-		// Create/Update RTVs
-		{
-			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
-			for (u32 i = 0; i < count_backbuffers; i++)
-			{
-				break_if_failed(swapchain->GetBuffer(i, IID_PPV_ARGS(&render_targets[i])));
-				device->CreateRenderTargetView(render_targets[i], nullptr, rtv_handle);
-				rtv_handle.Offset(1, rtv_descriptor_size);
-			}
-		}
-		
 		// Create fence
 		break_if_failed(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
 		fence_event = CreateEvent(0, false, false, 0);
 		AlwaysAssert(fence_event && "Failed creation of fence event");
 		
-		// Command Allocator
+		// Create Command Allocator
 		for (u32 i = 0; i < count_backbuffers; i++)
 		{
 			break_if_failed(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
 			                                               IID_PPV_ARGS(&command_allocators[i])));
 		}
 		
-		// Command Lists
+		// Create Command Lists
 		break_if_failed(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
 		                                          command_allocators[current_backbuffer_i], nullptr,
 		                                          IID_PPV_ARGS(&command_list)));
 		break_if_failed(command_list->Close()); 
-		
 	}
 	
 	//  ===============================================================================================================================	
@@ -258,6 +246,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	{
 		u64 tick_start = Win32::get_performance_ticks();
 		static u32 counter;
+		
 		// Input handling
 		Game_Controller* oldKeyboardMouseController = get_game_controller(oldInputs, 0);
 		Game_Controller* newKeyboardMouseController = get_game_controller(newInputs, 0);
@@ -269,6 +258,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			newKeyboardMouseController->mouse.x = oldKeyboardMouseController->mouse.x;
 			newKeyboardMouseController->mouse.y = oldKeyboardMouseController->mouse.y;
 		}
+		
 		// Windows message loop
 		MSG msg = {};
 		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -283,7 +273,48 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			}
 		}
 		
+		// Window size change check
+		auto&& [new_width, new_height] = Win32::get_window_client_dims(win_handle);
+		if (new_width != width || new_height != height || !render_targets[0])
+		{
+			width	= new_width;
+			height	= new_height;
+			
+			fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
+			
+			if (render_targets[0])
+			{
+				for (u32 i = 0; i < count_backbuffers; i++)
+				{
+					render_targets[i]->Release();
+					render_targets[i] = nullptr;
+					fence_values[i] = fence_values[current_backbuffer_i];
+				}
+			}
+			
+			if (width && height)
+			{
+				// Resize swap chain
+				DXGI_SWAP_CHAIN_DESC swapchain_desc{};
+				break_if_failed(swapchain->GetDesc(&swapchain_desc));
+				break_if_failed(swapchain->ResizeBuffers(count_backbuffers, width, height, 
+				                                         swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
+			
+				current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
+			
+				// Create/Update RTVs
+				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
+				for (u32 i = 0; i < count_backbuffers; i++)
+				{
+					break_if_failed(swapchain->GetBuffer(i, IID_PPV_ARGS(&render_targets[i])));
+					device->CreateRenderTargetView(render_targets[i], nullptr, rtv_handle);
+					rtv_handle.Offset(1, rtv_descriptor_size);
+				}
+			}
+		}
+		
 		// D3D12 render
+		if (width && height)
 		{
 			auto command_allocator = command_allocators[current_backbuffer_i];
 			auto backbuffer = render_targets[current_backbuffer_i];
@@ -338,6 +369,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			SetWindowText(win_handle, time_buf); //! WARNING - this might stall with very high fps (0.001ms)!
 		}
 	}
+	//TODO: Cleanup
 	debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
 	UnregisterClassA("DeRex12", GetModuleHandle(nullptr));
 	return 0;
