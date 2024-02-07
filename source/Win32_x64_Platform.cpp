@@ -11,6 +11,8 @@
 #include "Game_Services.hpp"
 #include "Win32_x64_Platform.hpp"
 
+#include "D3D12MemAlloc.h"
+
 #include "Allocators.hpp"
 #include "Views.hpp"
 #include "Math.hpp"
@@ -109,12 +111,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	u64 fence_values[count_backbuffers]{};
 	HANDLE fence_event = nullptr;
 	
+	D3D12MA::Allocator* dx_allocator = nullptr;
+	
 	// Startup initalization Direct3D12
 	{
 		auto&& [client_width, client_height] = Win32::get_window_client_dims(win_handle);
 		
 		IDXGIFactory4* factory = nullptr;
 		u32 factory_flags = 0;
+		auto d = defer([&] { factory->Release(); });
 		
 		// Enable Debug Layer
 		{
@@ -172,6 +177,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		#ifdef _DEBUG
 		break_if_failed(device->QueryInterface(&debug_device));
 		#endif
+		
+		// Create D3D12 Allocator
+		{
+			D3D12MA::ALLOCATOR_DESC alloc_desc
+			{
+				.pDevice = device,
+				.pAdapter = adapter
+			};
+
+			break_if_failed(D3D12MA::CreateAllocator(&alloc_desc, &dx_allocator));
+		}
 		
 		// Create Command Queue
 		{
@@ -369,7 +385,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			SetWindowText(win_handle, time_buf); //! WARNING - this might stall with very high fps (0.001ms)!
 		}
 	}
-	//TODO: Cleanup
+	//TODO: Rest of Cleanup
+	dx_allocator->Release();
 	debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
 	UnregisterClassA("DeRex12", GetModuleHandle(nullptr));
 	return 0;
