@@ -25,16 +25,14 @@
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\external\\D3D12\\"; }
 
-inline void break_if_failed(HRESULT hr)
-{
-	AlwaysAssert(SUCCEEDED(hr));
-}
+#define THR(hr) AlwaysAssert(SUCCEEDED(hr));
+#define RELEASE_SAFE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 [[nodiscard]]
 u64 signal_and_increment(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value)
 {
 	u64 value_to_signal = ++value;
-	break_if_failed(command_queue->Signal(fence, value_to_signal));
+	THR(command_queue->Signal(fence, value_to_signal));
 	return value_to_signal;
 }
 
@@ -43,7 +41,7 @@ void wait_for_fence(ID3D12Fence* fence, u64 value_to_wait, HANDLE event)
 	u64 completed_value = fence->GetCompletedValue();
 	if (completed_value < value_to_wait)
 	{
-		break_if_failed(fence->SetEventOnCompletion(value_to_wait, event));
+		THR(fence->SetEventOnCompletion(value_to_wait, event));
 		WaitForSingleObject(event, INFINITE);
 	}
 }
@@ -125,13 +123,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{
 			#ifdef _DEBUG
 			ID3D12Debug1* debug_controller;
-			break_if_failed(D3D12GetDebugInterface(IID_PPV_ARGS(&debug_controller)));
+			THR(D3D12GetDebugInterface(IID_PPV_ARGS(&debug_controller)));
 			debug_controller->EnableDebugLayer();
 			debug_controller->SetEnableGPUBasedValidation(true);
 			factory_flags |= DXGI_CREATE_FACTORY_DEBUG;
 			
 			IDXGIInfoQueue* info_queue;
-			break_if_failed(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&info_queue)));
+			THR(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&info_queue)));
 			info_queue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
             info_queue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
 			
@@ -141,13 +139,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 		
 		// Create Factory
-		break_if_failed(CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory)));
+		THR(CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory)));
 		
 		// Query for dedicated GPU, skip software & check support for D3D12
 		IDXGIAdapter1* adapter = nullptr;
 		{
 			IDXGIFactory6* temp_factory = nullptr;
-			break_if_failed(factory->QueryInterface(IID_PPV_ARGS(&temp_factory)));
+			THR(factory->QueryInterface(IID_PPV_ARGS(&temp_factory)));
 			
 			for (
 				u32 i = 0;
@@ -173,9 +171,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 			
 		// Create Device
-		break_if_failed(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&device)));
+		THR(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&device)));
 		#ifdef _DEBUG
-		break_if_failed(device->QueryInterface(&debug_device));
+		THR(device->QueryInterface(&debug_device));
 		#endif
 		
 		// Create D3D12 Allocator
@@ -186,7 +184,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				.pAdapter = adapter
 			};
 
-			break_if_failed(D3D12MA::CreateAllocator(&alloc_desc, &dx_allocator));
+			THR(D3D12MA::CreateAllocator(&alloc_desc, &dx_allocator));
 		}
 		
 		// Create Command Queue
@@ -198,7 +196,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				.Flags		= D3D12_COMMAND_QUEUE_FLAG_NONE, 
 				.NodeMask	= 0 
 			};
-			break_if_failed(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&command_queue)));
+			THR(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&command_queue)));
 		}
 		
 		// Create Swap chain
@@ -218,8 +216,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				.Flags			= 0 //TODO: G-sync support
 			};
 			IDXGISwapChain1* temp_swapchain = nullptr;
-			break_if_failed(factory->CreateSwapChainForHwnd(command_queue, win_handle, &swapchain_desc, 0, 0, &temp_swapchain));
-			break_if_failed(temp_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain));
+			THR(factory->CreateSwapChainForHwnd(command_queue, win_handle, &swapchain_desc, 0, 0, &temp_swapchain));
+			THR(temp_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain));
 			current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
 			
 			temp_swapchain->Release();
@@ -234,30 +232,45 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				.Flags			= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 				.NodeMask		= 0
 			};
-			break_if_failed(device->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&rtv_heap)));
+			THR(device->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&rtv_heap)));
 			rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
 		
 		// Create fence
-		break_if_failed(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+		THR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
 		fence_event = CreateEvent(0, false, false, 0);
 		AlwaysAssert(fence_event && "Failed creation of fence event");
 		
 		// Create Command Allocator
 		for (u32 i = 0; i < count_backbuffers; i++)
 		{
-			break_if_failed(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
+			THR(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
 			                                               IID_PPV_ARGS(&command_allocators[i])));
 		}
 		
 		// Create Command Lists
-		break_if_failed(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+		THR(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
 		                                          command_allocators[current_backbuffer_i], nullptr,
 		                                          IID_PPV_ARGS(&command_list)));
-		break_if_failed(command_list->Close()); 
+		THR(command_list->Close()); 
 	}
 	
 	//  ===============================================================================================================================	
+	
+	// Basic D3D12 needed for actual rendering
+	ID3D12RootSignature* root_sig = nullptr;
+	ID3D12PipelineState* pso = nullptr;
+	ID3D12Resource* vertex_buffer = nullptr; 
+	CD3DX12_VIEWPORT viewport{};
+	CD3DX12_RECT scissor_rect{};
+	D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
+	
+	// Create root signature
+	{
+		CD3DX12_ROOT_SIGNATURE_DESC root_sig_desc;
+		root_sig_desc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	}
+	
 	while (Win32::g_is_running)
 	{
 		u64 tick_start = Win32::get_performance_ticks();
@@ -312,8 +325,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			{
 				// Resize swap chain
 				DXGI_SWAP_CHAIN_DESC swapchain_desc{};
-				break_if_failed(swapchain->GetDesc(&swapchain_desc));
-				break_if_failed(swapchain->ResizeBuffers(count_backbuffers, width, height, 
+				THR(swapchain->GetDesc(&swapchain_desc));
+				THR(swapchain->ResizeBuffers(count_backbuffers, width, height, 
 				                                         swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
 			
 				current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
@@ -322,10 +335,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
 				for (u32 i = 0; i < count_backbuffers; i++)
 				{
-					break_if_failed(swapchain->GetBuffer(i, IID_PPV_ARGS(&render_targets[i])));
+					THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&render_targets[i])));
 					device->CreateRenderTargetView(render_targets[i], nullptr, rtv_handle);
 					rtv_handle.Offset(1, rtv_descriptor_size);
 				}
+				
+				// Update sizes of scissor, viewport
+				viewport	= CD3DX12_VIEWPORT( 0.0f, 0.0f, (float)width, (float)height );
+				scissor_rect = CD3DX12_RECT	( 0, 			0, 	(u32)width, 	(u32)height );
 			}
 		}
 		
@@ -357,7 +374,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				                                                                        D3D12_RESOURCE_STATE_RENDER_TARGET,
 				                                                                        D3D12_RESOURCE_STATE_PRESENT);
 				command_list->ResourceBarrier(1, &barrier);
-				break_if_failed(command_list->Close());
+				THR(command_list->Close());
 				
 				ID3D12CommandList* const commandLists[] = { command_list };
 				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
@@ -366,7 +383,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				fence_values[current_backbuffer_i] = fence_value = signal_and_increment(command_queue, fence, fence_value);
 				
 				// Present current backbuffer
-				break_if_failed(swapchain->Present(1, 0));
+				THR(swapchain->Present(1, 0));
 				
 				// Get next backbuffer - updated on swapchain by Present()
 				current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
@@ -386,7 +403,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 	}
 	//TODO: Rest of Cleanup
-	dx_allocator->Release();
+	RELEASE_SAFE(dx_allocator);
 	debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
 	UnregisterClassA("DeRex12", GetModuleHandle(nullptr));
 	return 0;
