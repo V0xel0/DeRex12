@@ -30,6 +30,7 @@
 		<AdditionalIncludePaths>
 			<AdditionalIncludePath>$(RootWorkspaceDirectory)/external/D3D12/</AdditionalIncludePath>
 			<AdditionalIncludePath>$(RootWorkspaceDirectory)/external/D3D12/headers</AdditionalIncludePath>
+			<AdditionalIncludePath>$(RootWorkspaceDirectory)/external/dxc/</AdditionalIncludePath>
 			<AdditionalIncludePath>E:\Visual_Studio_22\VC\Tools\MSVC\14.38.33130\include</AdditionalIncludePath>
 			<AdditionalIncludePath>E:\Visual_Studio_22\VC\Tools\MSVC\14.38.33130\ATLMFC\include</AdditionalIncludePath>
 			<AdditionalIncludePath>E:\Visual_Studio_22\VC\Auxiliary\VS\include</AdditionalIncludePath>
