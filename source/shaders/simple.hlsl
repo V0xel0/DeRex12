@@ -1,20 +1,20 @@
-
-// vertex
-struct VSIntput
+struct PSInput
 {
-	float4 position : POSITION;
+	float4 position : SV_POSITION;
 	float4 color : COLOR;
 };
 
-struct VSOutput
+PSInput VSMain(float4 position : POSITION, float4 color : COLOR)
 {
-	// data to output to the next stage
-};
+	PSInput result;
  
-
-// Explicitly declare the input vars as params of the entry point.
-// Therefore, the VSIntput struct is useless in this case.
-VSOutput VSMain(float4 position : POSITION, float4 color : COLOR)
+	result.position = position;
+	result.color = color;
+ 
+	return result;
+}
+ 
+float4 PSMain(PSInput input) : SV_TARGET
 {
-	// Use position and color to output the data that the next stage expects as input
+	return input.color;
 }
