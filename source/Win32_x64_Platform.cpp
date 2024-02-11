@@ -331,7 +331,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ID3D12Resource* vb_static = nullptr; 
 	CD3DX12_VIEWPORT viewport{};
 	CD3DX12_RECT scissor_rect{};
-	D3D12_VERTEX_BUFFER_VIEW view_vb_staging;
 	D3D12_VERTEX_BUFFER_VIEW view_vb_static; 
 	
 	// Pipeline creation
@@ -409,20 +408,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		
 		// Create heaps and upload data
 		{
-			u32 buffer_size = vertex_data.size * sizeof(Vertex);
+			const u32 buffer_size = vertex_data.size * sizeof(Vertex);
 			const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
 			const CD3DX12_HEAP_PROPERTIES prop_upload(D3D12_HEAP_TYPE_UPLOAD);
 			const CD3DX12_HEAP_PROPERTIES prop_default(D3D12_HEAP_TYPE_DEFAULT);
 			
 			THR(device->CreateCommittedResource(&prop_upload,
 			                                D3D12_HEAP_FLAG_NONE,
-			                                    &desc,
+			                                &desc,
 			                                D3D12_RESOURCE_STATE_GENERIC_READ,
 			                                nullptr,
 			                                IID_PPV_ARGS(&vb_staging)));
 			
 			vb_staging->SetName(L"Main vertex upload heap");
-			void* ptr;
+			void* ptr = nullptr;
 			CD3DX12_RANGE range(0, 0);
 			THR(vb_staging->Map(0, &range, &ptr));
 			memcpy(ptr, vertex_data.data, buffer_size);
@@ -435,10 +434,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			                                    nullptr,
 			                                    IID_PPV_ARGS(&vb_static)));
 			
+			vb_static->SetName(L"Main GPU vertex buffer");
 			view_vb_static.BufferLocation = vb_static->GetGPUVirtualAddress();
 			view_vb_static.StrideInBytes = sizeof(Vertex);
 			view_vb_static.SizeInBytes = buffer_size;
 			
+			command_list->CopyResource(vb_static, vb_staging);
+			auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
+																																		D3D12_RESOURCE_STATE_COPY_DEST, 
+																																		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+			command_list->ResourceBarrier(1, &barrier);
 		}
 	}
 	
