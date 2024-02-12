@@ -430,7 +430,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			THR(device->CreateCommittedResource(&prop_default,
 			                                    D3D12_HEAP_FLAG_NONE,
 			                                    &desc,
-			                                    D3D12_RESOURCE_STATE_COPY_DEST,
+			                                    D3D12_RESOURCE_STATE_COMMON,
 			                                    nullptr,
 			                                    IID_PPV_ARGS(&vb_static)));
 			
@@ -439,11 +439,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			view_vb_static.StrideInBytes = sizeof(Vertex);
 			view_vb_static.SizeInBytes = buffer_size;
 			
-			command_list->CopyResource(vb_static, vb_staging);
-			auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
-																																		D3D12_RESOURCE_STATE_COPY_DEST, 
-																																		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-			command_list->ResourceBarrier(1, &barrier);
+			// Copy to command, execute and full flush
+			//TODO: Compress command list, allocator, queue to interface with tracking
+			{
+				auto command_allocator = command_allocators[current_backbuffer_i];
+				command_list->Reset(command_allocator, nullptr);
+				command_list->CopyResource(vb_static, vb_staging);
+				auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
+				                                                    D3D12_RESOURCE_STATE_COPY_DEST, 
+				                                                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+			
+				command_list->ResourceBarrier(1, &barrier);
+				command_list->Close();
+				ID3D12CommandList* const commandLists[] = { command_list };
+				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
+				fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
+			}
 		}
 	}
 	
@@ -539,9 +550,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				                                                                        D3D12_RESOURCE_STATE_RENDER_TARGET);
 				command_list->ResourceBarrier(1, &barrier);
 				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
-				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
+				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
 				                                  current_backbuffer_i, rtv_descriptor_size);
-				command_list->ClearRenderTargetView(rtv, color.e, 0, nullptr);
+				command_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
+				command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+			}
+			
+			// Populate command list - drawing with default state
+			{
+				// Default state
+				command_list->RSSetViewports(1, &viewport);
+				command_list->RSSetScissorRects(1, &scissor_rect);
+				command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				
+				// Drawing
+				command_list->SetPipelineState(pso);
+				command_list->SetGraphicsRootSignature(root_sig);
+				command_list->IASetVertexBuffers(0, 1, &view_vb_static);
+				command_list->DrawInstanced(3, 1, 0, 0);
 			}
 			
 			// Present
