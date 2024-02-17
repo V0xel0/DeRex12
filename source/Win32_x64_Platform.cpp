@@ -541,7 +541,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			
 			command_allocator->Reset();
 			// Using one command list with 3 allocators (one for each backbuffer)
-			command_list->Reset(command_allocator, nullptr);
+			command_list->Reset(command_allocator, pso);
 			
 			// Clear render target
 			{
@@ -564,7 +564,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
 				// Drawing
-				command_list->SetPipelineState(pso);
+				//command_list->SetPipelineState(pso);
 				command_list->SetGraphicsRootSignature(root_sig);
 				command_list->IASetVertexBuffers(0, 1, &view_vb_static);
 				command_list->DrawInstanced(3, 1, 0, 0);
