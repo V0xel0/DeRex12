@@ -446,14 +446,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			//TODO: Compress command list, allocator, queue to interface with tracking
 			{
 				auto command_allocator = command_allocators[current_backbuffer_i];
-				command_list->Reset(command_allocator, nullptr);
+				THR(command_list->Reset(command_allocator, nullptr));
 				command_list->CopyResource(vb_static, vb_staging);
 				auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
 				                                                    D3D12_RESOURCE_STATE_COPY_DEST, 
 				                                                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 			
 				command_list->ResourceBarrier(1, &barrier);
-				command_list->Close();
+				THR(command_list->Close());
 				ID3D12CommandList* const commandLists[] = { command_list };
 				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
 				fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
@@ -538,9 +538,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			auto command_allocator = command_allocators[current_backbuffer_i];
 			auto backbuffer = render_targets[current_backbuffer_i];
 			
-			command_allocator->Reset();
+			THR(command_allocator->Reset());
 			// Using one command list with 3 allocators (one for each backbuffer)
-			command_list->Reset(command_allocator, pso);
+			THR(command_list->Reset(command_allocator, pso));
 			
 			// Clear render target
 			{
