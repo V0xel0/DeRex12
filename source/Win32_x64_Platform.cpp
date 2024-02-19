@@ -27,7 +27,14 @@
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\external\\D3D12\\"; }
 
-#define THR(hr) AlwaysAssert(SUCCEEDED(hr));
+#ifdef _DEBUG
+inline void THR(HRESULT hr) {
+	AlwaysAssert(SUCCEEDED(hr));
+}
+#else
+inline void THR(HRESULT) {}
+#endif
+
 #define RELEASE_SAFE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 struct Vertex
