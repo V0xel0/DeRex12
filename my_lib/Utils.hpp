@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+// version: 0.0.1 19.02.2024
+
 using f32 = float;
 using f64 = double;
 
@@ -58,6 +60,10 @@ DummyDefer<F> defer(F f)
 	return DummyDefer<F>(f);
 }
 
+const auto* get_const_ptr(const auto& obj) {
+	return &obj;
+}
+
 constexpr u32 trunc_u64_to_u32(u64 val)
 {
 	SoftAssert(val <= 0xffffffff);
@@ -80,25 +86,25 @@ constexpr u32 array_count_32(const T (&array)[N]) noexcept
 template <typename T>
 constexpr void swap(T &a, T &b)
 {
-    T temp(static_cast<T&&>(a));
-    a = static_cast<T&&>(b);
-    b = static_cast<T&&>(temp);
+	T temp(static_cast<T&&>(a));
+	a = static_cast<T&&>(b);
+	b = static_cast<T&&>(temp);
 }
 
 template<typename T>
 constexpr void pointer_swap(T **a, T **b)
 {
-    T *temp = *a;
-    *a = *b;
-    *b = temp;
+	T *temp = *a;
+	*a = *b;
+	*b = temp;
 }
 
 template<typename T>
 constexpr void value_swap(T *a, T *b)
 {
-    T temp = *a;
-    *a = *b;
-    *b = temp;
+	T temp = *a;
+	*a = *b;
+	*b = temp;
 }
 
 template<typename T>
@@ -114,7 +120,7 @@ constexpr auto min_v(T&&... args)
 {
 	auto min = (args, ...);
 	((args < min ? min = args : 0), ...);
-    return min;
+	return min;
 }
 
 template <typename ...T>
@@ -122,7 +128,7 @@ constexpr auto max_v(T&&... args)
 {
 	auto max = (args, ...);
 	((args > max ? max = args : 0), ...);
-    return max;
+	return max;
 }
 
 template <typename T>

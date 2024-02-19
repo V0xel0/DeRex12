@@ -327,10 +327,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	// Basic D3D12 needed for actual rendering
 	ID3D12RootSignature* root_sig = nullptr;
 	ID3D12PipelineState* pso = nullptr;
-	ID3D12Resource* vb_staging = nullptr;
 	ID3D12Resource* vb_static = nullptr; 
-	CD3DX12_VIEWPORT viewport{};
-	CD3DX12_RECT scissor_rect{};
 	D3D12_VERTEX_BUFFER_VIEW view_vb_static; 
 	
 	// Pipeline creation
@@ -408,12 +405,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		
 		// Create heaps and upload data
 		{
+			ID3D12Resource* vb_staging = nullptr;
 			const u32 buffer_size = vertex_data.size * sizeof(Vertex);
 			const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
-			const CD3DX12_HEAP_PROPERTIES prop_upload(D3D12_HEAP_TYPE_UPLOAD);
-			const CD3DX12_HEAP_PROPERTIES prop_default(D3D12_HEAP_TYPE_DEFAULT);
 			
-			THR(device->CreateCommittedResource(&prop_upload,
+			THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
 			                                D3D12_HEAP_FLAG_NONE,
 			                                &desc,
 			                                D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -427,7 +423,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			memcpy(ptr, vertex_data.data, buffer_size);
 			vb_staging->Unmap(0, nullptr);
 			
-			THR(device->CreateCommittedResource(&prop_default,
+			THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 			                                    D3D12_HEAP_FLAG_NONE,
 			                                    &desc,
 			                                    D3D12_RESOURCE_STATE_COMMON,
@@ -526,10 +522,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					device->CreateRenderTargetView(render_targets[i], nullptr, rtv_handle);
 					rtv_handle.Offset(1, rtv_descriptor_size);
 				}
-				
-				// Update sizes of scissor, viewport
-				viewport	= CD3DX12_VIEWPORT( 0.0f, 0.0f, (float)width, (float)height );
-				scissor_rect = CD3DX12_RECT	( 0, 			0, 	(u32)width, 	(u32)height );
 			}
 		}
 		
@@ -559,8 +551,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			// Populate command list - drawing with default state
 			{
 				// Default state
-				command_list->RSSetViewports(1, &viewport);
-				command_list->RSSetScissorRects(1, &scissor_rect);
+				command_list->RSSetViewports(1, get_const_ptr<D3D12_VIEWPORT>(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
+				command_list->RSSetScissorRects(1, get_const_ptr<D3D12_RECT>(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
 				command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
 				// Drawing
