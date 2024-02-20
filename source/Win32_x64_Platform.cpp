@@ -544,13 +544,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			
 			// Clear render target
 			{
-				CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
-				                                                                        D3D12_RESOURCE_STATE_PRESENT,
-				                                                                        D3D12_RESOURCE_STATE_RENDER_TARGET);
-				cmd_list->ResourceBarrier(1, &barrier);
+				cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
+				                          (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
+																																				D3D12_RESOURCE_STATE_PRESENT,
+																																				D3D12_RESOURCE_STATE_RENDER_TARGET)));
 				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
-				                                  current_backbuffer_i, rtv_descriptor_size);
+				                                  				current_backbuffer_i, rtv_descriptor_size);
 				cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
 				cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
 			}
@@ -571,10 +571,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			
 			// Present
 			{
-				CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
-				                                                                        D3D12_RESOURCE_STATE_RENDER_TARGET,
-				                                                                        D3D12_RESOURCE_STATE_PRESENT);
-				cmd_list->ResourceBarrier(1, &barrier);
+				cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
+				                          (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
+																																				D3D12_RESOURCE_STATE_RENDER_TARGET,
+																																				D3D12_RESOURCE_STATE_PRESENT)));
 				THR(cmd_list->Close());
 				
 				ID3D12CommandList* const commandLists[] = { cmd_list };
