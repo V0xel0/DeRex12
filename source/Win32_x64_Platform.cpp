@@ -104,7 +104,7 @@ IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_poi
 		 source.Ptr = ptr_source->GetBufferPointer();
 		 source.Size = ptr_source->GetBufferSize();
 		 source.Encoding = DXC_CP_ACP;
-			 
+			
 		 // Compile
 		 dx_compiler->Compile(
 			 &source,              // Source buffer.
@@ -172,7 +172,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ID3D12DescriptorHeap* rtv_heap = nullptr;
 		
 	ID3D12CommandQueue* command_queue = nullptr;
-	ID3D12GraphicsCommandList* command_list = nullptr;
+	ID3D12GraphicsCommandList* cmd_list = nullptr;
 	ID3D12CommandAllocator* command_allocators[count_backbuffers]{};
 
 	u32 rtv_descriptor_size = 0;
@@ -325,8 +325,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		// Create Command Lists
 		THR(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
 		                                          command_allocators[current_backbuffer_i], nullptr,
-		                                          IID_PPV_ARGS(&command_list)));
-		THR(command_list->Close()); 
+		                                          IID_PPV_ARGS(&cmd_list)));
+		THR(cmd_list->Close()); 
 	}
 	
 	//  ===============================================================================================================================	
@@ -446,15 +446,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			//TODO: Compress command list, allocator, queue to interface with tracking
 			{
 				auto command_allocator = command_allocators[current_backbuffer_i];
-				THR(command_list->Reset(command_allocator, nullptr));
-				command_list->CopyResource(vb_static, vb_staging);
+				THR(cmd_list->Reset(command_allocator, nullptr));
+				cmd_list->CopyResource(vb_static, vb_staging);
 				auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
 				                                                    D3D12_RESOURCE_STATE_COPY_DEST, 
 				                                                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 			
-				command_list->ResourceBarrier(1, &barrier);
-				THR(command_list->Close());
-				ID3D12CommandList* const commandLists[] = { command_list };
+				cmd_list->ResourceBarrier(1, &barrier);
+				THR(cmd_list->Close());
+				ID3D12CommandList* const commandLists[] = { cmd_list };
 				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
 				fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
 			}
@@ -531,42 +531,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 			}
 		}
-		
+			
 		// D3D12 render
 		if (width && height)
 		{
-			auto command_allocator = command_allocators[current_backbuffer_i];
+			auto cmd_alloc = command_allocators[current_backbuffer_i];
 			auto backbuffer = render_targets[current_backbuffer_i];
 			
-			THR(command_allocator->Reset());
-			// Using one command list with 3 allocators (one for each backbuffer)
-			THR(command_list->Reset(command_allocator, pso));
+			THR(cmd_alloc->Reset());
+			// Reset current command list taken from current command allocator
+			THR(cmd_list->Reset(cmd_alloc, pso));
 			
 			// Clear render target
 			{
 				CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 				                                                                        D3D12_RESOURCE_STATE_PRESENT,
 				                                                                        D3D12_RESOURCE_STATE_RENDER_TARGET);
-				command_list->ResourceBarrier(1, &barrier);
+				cmd_list->ResourceBarrier(1, &barrier);
 				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
 				                                  current_backbuffer_i, rtv_descriptor_size);
-				command_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
-				command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+				cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
+				cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
 			}
 			
 			// Populate command list - drawing with default state
 			{
 				// Default state
-				command_list->RSSetViewports(1, get_const_ptr<D3D12_VIEWPORT>(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
-				command_list->RSSetScissorRects(1, get_const_ptr<D3D12_RECT>(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
-				command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				cmd_list->RSSetViewports(1, get_const_ptr<D3D12_VIEWPORT>(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
+				cmd_list->RSSetScissorRects(1, get_const_ptr<D3D12_RECT>(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
+				cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
 				// Drawing
 				//command_list->SetPipelineState(pso);
-				command_list->SetGraphicsRootSignature(root_sig);
-				command_list->IASetVertexBuffers(0, 1, &view_vb_static);
-				command_list->DrawInstanced(3, 1, 0, 0);
+				cmd_list->SetGraphicsRootSignature(root_sig);
+				cmd_list->IASetVertexBuffers(0, 1, &view_vb_static);
+				cmd_list->DrawInstanced(3, 1, 0, 0);
 			}
 			
 			// Present
@@ -574,10 +574,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 				                                                                        D3D12_RESOURCE_STATE_RENDER_TARGET,
 				                                                                        D3D12_RESOURCE_STATE_PRESENT);
-				command_list->ResourceBarrier(1, &barrier);
-				THR(command_list->Close());
+				cmd_list->ResourceBarrier(1, &barrier);
+				THR(cmd_list->Close());
 				
-				ID3D12CommandList* const commandLists[] = { command_list };
+				ID3D12CommandList* const commandLists[] = { cmd_list };
 				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
 				
 				// Signal - temporary values are needed when signaling to avoid race condition, even when single CPU thread is used
