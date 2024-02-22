@@ -410,7 +410,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										 Vertex{ { -0.25f,	-0.25f,		0.0f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } });
 		vertex_data.set_count(vertex_data.size);
 		
+		auto command_allocator = command_allocators[current_backbuffer_i];
+		THR(cmd_list->Reset(command_allocator, nullptr));
+		
 		// Create heaps and upload data
+		
 		{
 			ID3D12Resource* vb_staging = nullptr;
 			const u32 buffer_size = vertex_data.size * sizeof(Vertex);
@@ -442,20 +446,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			view_vb_static.StrideInBytes = sizeof(Vertex);
 			view_vb_static.SizeInBytes = buffer_size;
 			
-			// Copy to command, execute and full flush
-			//TODO: Compress command list, allocator, queue to interface with tracking
+			cmd_list->CopyResource(vb_static, vb_staging);
+			cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>(
+																	CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
+																																				D3D12_RESOURCE_STATE_COPY_DEST, 
+																																				D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)));
+			// executing all uploads 
 			{
-				auto command_allocator = command_allocators[current_backbuffer_i];
-				THR(cmd_list->Reset(command_allocator, nullptr));
-				cmd_list->CopyResource(vb_static, vb_staging);
-				auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
-				                                                    D3D12_RESOURCE_STATE_COPY_DEST, 
-				                                                    D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-			
-				cmd_list->ResourceBarrier(1, &barrier);
 				THR(cmd_list->Close());
 				ID3D12CommandList* const commandLists[] = { cmd_list };
 				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
+				// TODO: For now, lets fully stall on CPU until GPU finished copying all data, async this in future
 				fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
 			}
 		}

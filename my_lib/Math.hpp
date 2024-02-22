@@ -889,7 +889,7 @@ namespace lib
 
 		// transpose 3x3
 		__m128 t0 = _mm_movelh_ps(a.columns[0], a.columns[1]);
-		__m128 t1 = _mm_movehl_ps(a.columns[0], a.columns[1]);
+		__m128 t1 = _mm_movehl_ps(a.columns[0], a.columns[1]); // this should be [1] then [0]?
 		out.columns[0] = _mm_shuffle_ps(t0, a.columns[2], _MM_SHUFFLE( 3,0,2,0 ) );
 		out.columns[1] = _mm_shuffle_ps(t0, a.columns[2], _MM_SHUFFLE( 3,1,3,1 ) );
 		out.columns[2] = _mm_shuffle_ps(t1, a.columns[2], _MM_SHUFFLE( 3,2,2,0 ) );
