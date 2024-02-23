@@ -103,7 +103,7 @@ GPU_Resource upload_static_data(Array_View<T>data_cpu, ID3D12GraphicsCommandList
 																																						IID_PPV_ARGS(&out.ptr)));
 			
 	cmd_list->CopyResource(out.ptr, vb_staging);
-	cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>(CD3DX12_RESOURCE_BARRIER::Transition
+	cmd_list->ResourceBarrier(1, get_const_ptr(CD3DX12_RESOURCE_BARRIER::Transition
 																																				(out.ptr, 
 																																				D3D12_RESOURCE_STATE_COPY_DEST, 
 																																				out.state)));
@@ -209,8 +209,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ID3D12DebugDevice2* debug_device = nullptr;
 		
 	IDXGISwapChain4* swapchain = nullptr;
-	ID3D12Resource* render_targets[count_backbuffers]{};
+	ID3D12Resource* rtv_texture[count_backbuffers]{};
 	ID3D12DescriptorHeap* rtv_heap = nullptr;
+	
+	GPU_Resource dsv_texture{};
+	ID3D12DescriptorHeap* dsv_heap = nullptr;
 		
 	ID3D12CommandQueue* queue_direct = nullptr;
 	ID3D12GraphicsCommandList* cmd_list_direct = nullptr;
@@ -338,7 +341,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			temp_swapchain->Release();
 		}
 		
-		// Create Descriptor heap for RTVs
+		// Create RTV heap
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC rtv_desc
 			{
@@ -349,6 +352,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			};
 			THR(device->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&rtv_heap)));
 			rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		}
+		
+		// Create DSV heap
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC dsv_desc
+			{
+				.Type						= D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+				.NumDescriptors	= 1,
+				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+				.NodeMask				= 0
+			};
+			THR(device->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&dsv_heap)));
 		}
 		
 		// Create fence
@@ -422,7 +437,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		IDxcBlob* vertex_shader;
 		THR(result_vs->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&vertex_shader), nullptr));
 		
-		// Create PSO
+		// Create default PSO
 		{
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc{};
 			pso_desc.InputLayout = { ia_layout, _countof(ia_layout) };
@@ -431,11 +446,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			pso_desc.PS = { pixel_shader->GetBufferPointer(),  pixel_shader->GetBufferSize() };
 			pso_desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 			pso_desc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-			pso_desc.DepthStencilState.DepthEnable = FALSE;
-			pso_desc.DepthStencilState.StencilEnable = FALSE;
+			pso_desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 			pso_desc.SampleMask = UINT_MAX;
 			pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 			pso_desc.NumRenderTargets = 1;
+			pso_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 			pso_desc.SampleDesc.Count = 1;
 			
@@ -443,7 +458,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 	}
 	
-	// Data initalization
+	// Static data initalization
 	{
 		Array_View<Vertex>vertex_data{};
 		vertex_data.init(&global_arena, 
@@ -505,19 +520,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		
 		// Window size change check
 		auto&& [new_width, new_height] = Win32::get_window_client_dims(win_handle);
-		if (new_width != width || new_height != height || !render_targets[0])
+		if (new_width != width || new_height != height || !rtv_texture[0])
 		{
 			width	= new_width;
 			height	= new_height;
 			
 			fence_counter = flush(queue_direct, fence_direct, fence_counter, fence_event);
 			
-			if (render_targets[0])
+			if (rtv_texture[0])
 			{
 				for (u32 i = 0; i < count_backbuffers; i++)
 				{
-					render_targets[i]->Release();
-					render_targets[i] = nullptr;
+					rtv_texture[i]->Release();
+					rtv_texture[i] = nullptr;
 					fence_values[i] = fence_values[back_buffer_i];
 				}
 			}
@@ -532,13 +547,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			
 				back_buffer_i = swapchain->GetCurrentBackBufferIndex();
 			
-				// Create/Update RTVs
+				// Create/Update RTV textures
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
 				for (u32 i = 0; i < count_backbuffers; i++)
 				{
-					THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&render_targets[i])));
-					device->CreateRenderTargetView(render_targets[i], nullptr, rtv_handle);
+					THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
+					device->CreateRenderTargetView(rtv_texture[i], nullptr, rtv_handle);
 					rtv_handle.Offset(1, rtv_descriptor_size);
+				}
+				
+				// Create/Update DSV, depth texture
+				{
+					dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
+							(DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+
+					THR(device->CreateCommittedResource(
+						get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+						D3D12_HEAP_FLAG_NONE,
+						&dsv_texture.desc,
+						D3D12_RESOURCE_STATE_DEPTH_WRITE,
+						get_const_ptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
+						IID_PPV_ARGS(&dsv_texture.ptr)
+					));
+					dsv_heap->SetName(L"Depth/Stencil Resource Heap");
+					
+					// Create/Update descriptor/view
+					{
+						D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
+						{
+							.Format 						=	DXGI_FORMAT_D32_FLOAT,
+							.ViewDimension 			= D3D12_DSV_DIMENSION_TEXTURE2D,
+							.Flags 							= D3D12_DSV_FLAG_NONE,
+							.Texture2D {.MipSlice = 0}
+						};
+						device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
+						                               dsv_heap->GetCPUDescriptorHandleForHeapStart());
+					}
 				}
 			}
 		}
@@ -547,30 +591,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		if (width && height)
 		{
 			auto cmd_alloc = cmd_allocators_direct[back_buffer_i];
-			auto backbuffer = render_targets[back_buffer_i];
+			auto backbuffer = rtv_texture[back_buffer_i];
 			
 			THR(cmd_alloc->Reset());
 			// Reset current command list taken from current command allocator
 			THR(cmd_list_direct->Reset(cmd_alloc, pso));
 			
-			// Clear render target
+			// Clear rtv & dsv
 			{
-				cmd_list_direct->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
-				                          (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
+				cmd_list_direct->ResourceBarrier(1, get_const_ptr(CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 																																				D3D12_RESOURCE_STATE_PRESENT,
 																																				D3D12_RESOURCE_STATE_RENDER_TARGET)));
 				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
 				                                  				back_buffer_i, rtv_descriptor_size);
+				CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->GetCPUDescriptorHandleForHeapStart());
+				
 				cmd_list_direct->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
-				cmd_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+				cmd_list_direct->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+				cmd_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
 			}
 			
 			// Populate command list - drawing with default state
 			{
 				// Default state
-				cmd_list_direct->RSSetViewports(1, get_const_ptr<D3D12_VIEWPORT>(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
-				cmd_list_direct->RSSetScissorRects(1, get_const_ptr<D3D12_RECT>(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
+				cmd_list_direct->RSSetViewports(1, get_const_ptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
+				cmd_list_direct->RSSetScissorRects(1, get_const_ptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
 				cmd_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
 				// Drawing
@@ -595,7 +641,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			
 			// Present
 			{
-				cmd_list_direct->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
+				cmd_list_direct->ResourceBarrier(1, get_const_ptr
 				                          (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 																																				D3D12_RESOURCE_STATE_RENDER_TARGET,
 																																				D3D12_RESOURCE_STATE_PRESENT)));
