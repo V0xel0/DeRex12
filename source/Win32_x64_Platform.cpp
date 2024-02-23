@@ -1,9 +1,3 @@
-//? This Translation Unit provides data and services (declared by application) from OS to a game/app layer
-//? Architecture style is inspired from "Handmade Hero" series by Casey Muratori:
-//? Application is treated as a service that OS fulfills,
-//? instead of abstracting platform code and handling it as kind of "Virtual OS"
-//? In case of porting to a different platform, this is the ONLY file you need to change
-
 #include <cstdio>
 
 #include "Utils.hpp"
@@ -43,6 +37,13 @@ struct Vertex
 	lib::Vec4 color;
 };
 
+struct GPU_Resource
+{
+	ID3D12Resource* ptr;
+	D3D12_RESOURCE_STATES state;
+	D3D12_RESOURCE_DESC desc;
+};
+
 [[nodiscard]]
 u64 signal(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value)
 {
@@ -67,6 +68,46 @@ u64 flush(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value, HAND
 	u64 value_to_signal = signal(command_queue, fence, value);
 	wait_for_fence(fence, value_to_signal, event);
 	return value_to_signal;
+}
+
+//TODO: Later probably abstracted device and abstracted context
+template <typename T>
+[[nodiscard]]
+GPU_Resource upload_static_data(Array_View<T>data_cpu, ID3D12GraphicsCommandList* cmd_list, ID3D12Device2* device)
+{
+	GPU_Resource out{};
+	ID3D12Resource* vb_staging = nullptr;
+	const u32 buffer_size = data_cpu.size * sizeof(T);
+	const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
+			
+	THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+			                                D3D12_HEAP_FLAG_NONE,
+			                                &desc,
+			                                D3D12_RESOURCE_STATE_GENERIC_READ,
+			                                nullptr,
+			                                IID_PPV_ARGS(&vb_staging)));
+			
+	void* ptr = nullptr;
+	CD3DX12_RANGE range(0, 0);
+	THR(vb_staging->Map(0, &range, &ptr));
+	memcpy(ptr, data_cpu.data, buffer_size);
+	vb_staging->Unmap(0, nullptr);
+	
+	out.desc = desc;
+	out.state = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+	THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+																																						D3D12_HEAP_FLAG_NONE,
+																																						&desc,
+																																						D3D12_RESOURCE_STATE_COMMON,
+																																						nullptr,
+																																						IID_PPV_ARGS(&out.ptr)));
+			
+	cmd_list->CopyResource(out.ptr, vb_staging);
+	cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>(CD3DX12_RESOURCE_BARRIER::Transition
+																																				(out.ptr, 
+																																				D3D12_RESOURCE_STATE_COPY_DEST, 
+																																				out.state)));
+	return out;
 }
 
 IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_point, LPCWSTR target )
@@ -334,8 +375,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	// Basic D3D12 needed for actual rendering
 	ID3D12RootSignature* root_sig = nullptr;
 	ID3D12PipelineState* pso = nullptr;
-	ID3D12Resource* vb_static = nullptr; 
-	D3D12_VERTEX_BUFFER_VIEW view_vb_static; 
+	
+	GPU_Resource vertices_static{};
+	GPU_Resource indices_static{};
 	
 	// Pipeline creation
 	{
@@ -408,56 +450,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		                 Vertex{ {	0.0f,		0.25f,		0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
 										 Vertex{ {	0.25f,	-0.25f,		0.0f, 1.0f },	{ 0.0f, 1.0f, 0.0f, 1.0f } },
 										 Vertex{ { -0.25f,	-0.25f,		0.0f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } });
-		vertex_data.set_count(vertex_data.size);
+		
+		Array_View<u16>indices_data{};
+		indices_data.init(&global_arena, 0, 1, 2);
 		
 		auto command_allocator = cmd_allocators_direct[back_buffer_i];
 		THR(cmd_list_direct->Reset(command_allocator, nullptr));
 		
-		// Create heaps and upload data	
+		// Create heaps and upload data
+		vertices_static = upload_static_data(vertex_data, cmd_list_direct, device);
+		indices_static = upload_static_data(indices_data, cmd_list_direct, device);
+		                 
+		// executing all uploads 
 		{
-			ID3D12Resource* vb_staging = nullptr;
-			const u32 buffer_size = vertex_data.size * sizeof(Vertex);
-			const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
-			
-			THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-			                                D3D12_HEAP_FLAG_NONE,
-			                                &desc,
-			                                D3D12_RESOURCE_STATE_GENERIC_READ,
-			                                nullptr,
-			                                IID_PPV_ARGS(&vb_staging)));
-			
-			vb_staging->SetName(L"Main vertex upload heap");
-			void* ptr = nullptr;
-			CD3DX12_RANGE range(0, 0);
-			THR(vb_staging->Map(0, &range, &ptr));
-			memcpy(ptr, vertex_data.data, buffer_size);
-			vb_staging->Unmap(0, nullptr);
-			
-			THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-			                                    D3D12_HEAP_FLAG_NONE,
-			                                    &desc,
-			                                    D3D12_RESOURCE_STATE_COMMON,
-			                                    nullptr,
-			                                    IID_PPV_ARGS(&vb_static)));
-			
-			vb_static->SetName(L"Main GPU vertex buffer");
-			view_vb_static.BufferLocation = vb_static->GetGPUVirtualAddress();
-			view_vb_static.StrideInBytes = sizeof(Vertex);
-			view_vb_static.SizeInBytes = buffer_size;
-			
-			cmd_list_direct->CopyResource(vb_static, vb_staging);
-			cmd_list_direct->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>(
-																	CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
-																																				D3D12_RESOURCE_STATE_COPY_DEST, 
-																																				D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)));
-			// executing all uploads 
-			{
-				THR(cmd_list_direct->Close());
-				ID3D12CommandList* const commandLists[] = { cmd_list_direct };
-				queue_direct->ExecuteCommandLists(_countof(commandLists), commandLists);
-				// TODO: For now, lets fully stall on CPU until GPU finished copying all data, async this in future
-				fence_counter = flush(queue_direct, fence_direct, fence_counter, fence_event);
-			}
+			THR(cmd_list_direct->Close());
+			ID3D12CommandList* const commandLists[] = { cmd_list_direct };
+			queue_direct->ExecuteCommandLists(_countof(commandLists), commandLists);
+			// TODO: For now, lets fully stall on CPU until GPU finished copying all data, async this in future
+			fence_counter = flush(queue_direct, fence_direct, fence_counter, fence_event);
 		}
 	}
 	
@@ -565,8 +575,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				// Drawing
 				//command_list->SetPipelineState(pso);
 				cmd_list_direct->SetGraphicsRootSignature(root_sig);
-				cmd_list_direct->IASetVertexBuffers(0, 1, &view_vb_static);
-				cmd_list_direct->DrawInstanced(3, 1, 0, 0);
+				D3D12_VERTEX_BUFFER_VIEW vb_view_static 
+				{ 
+					.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
+					.SizeInBytes = (UINT)vertices_static.desc.Width,
+					.StrideInBytes = sizeof(Vertex)
+				};
+				cmd_list_direct->IASetVertexBuffers(0, 1, &vb_view_static);
+				D3D12_INDEX_BUFFER_VIEW ib_view_static
+				{
+					.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
+					.SizeInBytes = (UINT)indices_static.desc.Width,
+					.Format = DXGI_FORMAT_R16_UINT
+				};
+				cmd_list_direct->IASetIndexBuffer(&ib_view_static);
+				cmd_list_direct->DrawIndexedInstanced(3, 1, 0, 0, 0);
 			}
 			
 			// Present
