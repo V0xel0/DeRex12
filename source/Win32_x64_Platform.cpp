@@ -44,7 +44,7 @@ struct Vertex
 };
 
 [[nodiscard]]
-u64 signal_and_increment(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value)
+u64 signal(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value)
 {
 	u64 value_to_signal = ++value;
 	THR(command_queue->Signal(fence, value_to_signal));
@@ -62,9 +62,9 @@ void wait_for_fence(ID3D12Fence* fence, u64 value_to_wait, HANDLE event)
 }
 
 [[nodiscard]]
-u64 flush_and_increment(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value, HANDLE event)
+u64 flush(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value, HANDLE event)
 {
-	u64 value_to_signal = signal_and_increment(command_queue, fence, value);
+	u64 value_to_signal = signal(command_queue, fence, value);
 	wait_for_fence(fence, value_to_signal, event);
 	return value_to_signal;
 }
@@ -171,15 +171,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ID3D12Resource* render_targets[count_backbuffers]{};
 	ID3D12DescriptorHeap* rtv_heap = nullptr;
 		
-	ID3D12CommandQueue* command_queue = nullptr;
-	ID3D12GraphicsCommandList* cmd_list = nullptr;
-	ID3D12CommandAllocator* command_allocators[count_backbuffers]{};
+	ID3D12CommandQueue* queue_direct = nullptr;
+	ID3D12GraphicsCommandList* cmd_list_direct = nullptr;
+	ID3D12CommandAllocator* cmd_allocators_direct[count_backbuffers]{};
 
 	u32 rtv_descriptor_size = 0;
-	u32 current_backbuffer_i = 0;
+	u32 back_buffer_i = 0;
 		
-	ID3D12Fence* fence = nullptr;
-	u64 fence_value = 0;
+	ID3D12Fence* fence_direct = nullptr;
+	u64 fence_counter = 0;
 	u64 fence_values[count_backbuffers]{};
 	HANDLE fence_event = nullptr;
 	
@@ -270,7 +270,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				.Flags		= D3D12_COMMAND_QUEUE_FLAG_NONE, 
 				.NodeMask	= 0 
 			};
-			THR(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&command_queue)));
+			THR(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queue_direct)));
 		}
 		
 		// Create Swap chain
@@ -290,9 +290,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				.Flags				= 0 //TODO: G-sync support
 			};
 			IDXGISwapChain1* temp_swapchain = nullptr;
-			THR(factory->CreateSwapChainForHwnd(command_queue, win_handle, &swapchain_desc, 0, 0, &temp_swapchain));
+			THR(factory->CreateSwapChainForHwnd(queue_direct, win_handle, &swapchain_desc, 0, 0, &temp_swapchain));
 			THR(temp_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain));
-			current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
+			back_buffer_i = swapchain->GetCurrentBackBufferIndex();
 			
 			temp_swapchain->Release();
 		}
@@ -311,7 +311,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 		
 		// Create fence
-		THR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+		THR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_direct)));
 		fence_event = CreateEvent(0, false, false, 0);
 		AlwaysAssert(fence_event && "Failed creation of fence event");
 		
@@ -319,14 +319,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		for (u32 i = 0; i < count_backbuffers; i++)
 		{
 			THR(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
-			                                               IID_PPV_ARGS(&command_allocators[i])));
+			                                               IID_PPV_ARGS(&cmd_allocators_direct[i])));
 		}
 		
 		// Create Command Lists
 		THR(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
-		                                          command_allocators[current_backbuffer_i], nullptr,
-		                                          IID_PPV_ARGS(&cmd_list)));
-		THR(cmd_list->Close()); 
+		                                          cmd_allocators_direct[back_buffer_i], nullptr,
+		                                          IID_PPV_ARGS(&cmd_list_direct)));
+		THR(cmd_list_direct->Close()); 
 	}
 	
 	//  ===============================================================================================================================	
@@ -410,11 +410,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 										 Vertex{ { -0.25f,	-0.25f,		0.0f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } });
 		vertex_data.set_count(vertex_data.size);
 		
-		auto command_allocator = command_allocators[current_backbuffer_i];
-		THR(cmd_list->Reset(command_allocator, nullptr));
+		auto command_allocator = cmd_allocators_direct[back_buffer_i];
+		THR(cmd_list_direct->Reset(command_allocator, nullptr));
 		
-		// Create heaps and upload data
-		
+		// Create heaps and upload data	
 		{
 			ID3D12Resource* vb_staging = nullptr;
 			const u32 buffer_size = vertex_data.size * sizeof(Vertex);
@@ -446,18 +445,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			view_vb_static.StrideInBytes = sizeof(Vertex);
 			view_vb_static.SizeInBytes = buffer_size;
 			
-			cmd_list->CopyResource(vb_static, vb_staging);
-			cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>(
+			cmd_list_direct->CopyResource(vb_static, vb_staging);
+			cmd_list_direct->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>(
 																	CD3DX12_RESOURCE_BARRIER::Transition(vb_static, 
 																																				D3D12_RESOURCE_STATE_COPY_DEST, 
 																																				D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)));
 			// executing all uploads 
 			{
-				THR(cmd_list->Close());
-				ID3D12CommandList* const commandLists[] = { cmd_list };
-				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
+				THR(cmd_list_direct->Close());
+				ID3D12CommandList* const commandLists[] = { cmd_list_direct };
+				queue_direct->ExecuteCommandLists(_countof(commandLists), commandLists);
 				// TODO: For now, lets fully stall on CPU until GPU finished copying all data, async this in future
-				fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
+				fence_counter = flush(queue_direct, fence_direct, fence_counter, fence_event);
 			}
 		}
 	}
@@ -500,7 +499,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			width	= new_width;
 			height	= new_height;
 			
-			fence_value = flush_and_increment(command_queue, fence, fence_value, fence_event);
+			fence_counter = flush(queue_direct, fence_direct, fence_counter, fence_event);
 			
 			if (render_targets[0])
 			{
@@ -508,7 +507,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				{
 					render_targets[i]->Release();
 					render_targets[i] = nullptr;
-					fence_values[i] = fence_values[current_backbuffer_i];
+					fence_values[i] = fence_values[back_buffer_i];
 				}
 			}
 			
@@ -520,7 +519,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				THR(swapchain->ResizeBuffers(count_backbuffers, width, height, 
 				                                         swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
 			
-				current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
+				back_buffer_i = swapchain->GetCurrentBackBufferIndex();
 			
 				// Create/Update RTVs
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
@@ -536,62 +535,62 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		// D3D12 render
 		if (width && height)
 		{
-			auto cmd_alloc = command_allocators[current_backbuffer_i];
-			auto backbuffer = render_targets[current_backbuffer_i];
+			auto cmd_alloc = cmd_allocators_direct[back_buffer_i];
+			auto backbuffer = render_targets[back_buffer_i];
 			
 			THR(cmd_alloc->Reset());
 			// Reset current command list taken from current command allocator
-			THR(cmd_list->Reset(cmd_alloc, pso));
+			THR(cmd_list_direct->Reset(cmd_alloc, pso));
 			
 			// Clear render target
 			{
-				cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
+				cmd_list_direct->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
 				                          (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 																																				D3D12_RESOURCE_STATE_PRESENT,
 																																				D3D12_RESOURCE_STATE_RENDER_TARGET)));
 				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
-				                                  				current_backbuffer_i, rtv_descriptor_size);
-				cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
-				cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+				                                  				back_buffer_i, rtv_descriptor_size);
+				cmd_list_direct->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
+				cmd_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
 			}
 			
 			// Populate command list - drawing with default state
 			{
 				// Default state
-				cmd_list->RSSetViewports(1, get_const_ptr<D3D12_VIEWPORT>(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
-				cmd_list->RSSetScissorRects(1, get_const_ptr<D3D12_RECT>(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
-				cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				cmd_list_direct->RSSetViewports(1, get_const_ptr<D3D12_VIEWPORT>(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
+				cmd_list_direct->RSSetScissorRects(1, get_const_ptr<D3D12_RECT>(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
+				cmd_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
 				// Drawing
 				//command_list->SetPipelineState(pso);
-				cmd_list->SetGraphicsRootSignature(root_sig);
-				cmd_list->IASetVertexBuffers(0, 1, &view_vb_static);
-				cmd_list->DrawInstanced(3, 1, 0, 0);
+				cmd_list_direct->SetGraphicsRootSignature(root_sig);
+				cmd_list_direct->IASetVertexBuffers(0, 1, &view_vb_static);
+				cmd_list_direct->DrawInstanced(3, 1, 0, 0);
 			}
 			
 			// Present
 			{
-				cmd_list->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
+				cmd_list_direct->ResourceBarrier(1, get_const_ptr<CD3DX12_RESOURCE_BARRIER>
 				                          (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 																																				D3D12_RESOURCE_STATE_RENDER_TARGET,
 																																				D3D12_RESOURCE_STATE_PRESENT)));
-				THR(cmd_list->Close());
+				THR(cmd_list_direct->Close());
 				
-				ID3D12CommandList* const commandLists[] = { cmd_list };
-				command_queue->ExecuteCommandLists(_countof(commandLists), commandLists);
-				
-				// Signal - temporary values are needed when signaling to avoid race condition, even when single CPU thread is used
-				fence_values[current_backbuffer_i] = fence_value = signal_and_increment(command_queue, fence, fence_value);
+				ID3D12CommandList* const commandLists[] = { cmd_list_direct };
+				queue_direct->ExecuteCommandLists(_countof(commandLists), commandLists);
 				
 				// Present current backbuffer
 				THR(swapchain->Present(1, 0));
 				
+				// Signal - through fence_counter when signaling to avoid race condition
+				fence_values[back_buffer_i] = fence_counter = signal(queue_direct, fence_direct, fence_counter);
+				
 				// Get next backbuffer - updated on swapchain by Present()
-				current_backbuffer_i = swapchain->GetCurrentBackBufferIndex();
+				back_buffer_i = swapchain->GetCurrentBackBufferIndex();
 				
 				// Wait for frame (n-1), so we are not waiting on 'this' frame
-				wait_for_fence(fence, fence_values[current_backbuffer_i], fence_event);
+				wait_for_fence(fence_direct, fence_values[back_buffer_i], fence_event);
 			}
 		}
 		
