@@ -447,12 +447,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	{
 		Array_View<Vertex>vertex_data{};
 		vertex_data.init(&global_arena, 
-		                 Vertex{ {	0.0f,		0.25f,		0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-										 Vertex{ {	0.25f,	-0.25f,		0.0f, 1.0f },	{ 0.0f, 1.0f, 0.0f, 1.0f } },
-										 Vertex{ { -0.25f,	-0.25f,		0.0f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } });
+		                 Vertex{ {	-0.5f, 0.5f, 0.5f, 1.0f },	{ 1.0f, 0.0f, 0.0f, 1.0f } },
+										 Vertex{ {	0.5f, -0.5f, 0.5f, 1.0f },	{ 0.0f, 1.0f, 0.0f, 1.0f } },
+										 Vertex{ { -0.5f, -0.5f, 0.5f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
+										 Vertex{ {	0.5f,  0.5f, 0.5f, 1.0f }, 	{ 0.0f, 1.0f, 1.0f, 1.0f } });
 		
 		Array_View<u16>indices_data{};
-		indices_data.init(&global_arena, 0, 1, 2);
+		indices_data.init(&global_arena, 0, 1, 2,  0, 3, 1);
 		
 		auto command_allocator = cmd_allocators_direct[back_buffer_i];
 		THR(cmd_list_direct->Reset(command_allocator, nullptr));
@@ -589,7 +590,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					.Format = DXGI_FORMAT_R16_UINT
 				};
 				cmd_list_direct->IASetIndexBuffer(&ib_view_static);
-				cmd_list_direct->DrawIndexedInstanced(3, 1, 0, 0, 0);
+				cmd_list_direct->DrawIndexedInstanced(6, 1, 0, 0, 0);
 			}
 			
 			// Present
