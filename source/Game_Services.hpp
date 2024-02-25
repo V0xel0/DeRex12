@@ -1,4 +1,12 @@
 #pragma once
+
+struct Game_Window
+{
+	void* handle;
+	u32 width;
+	u32 height;
+};
+
 struct Game_Key_State
 {
 	s32 halfTransCount;
@@ -50,6 +58,17 @@ struct Game_Input
 	Game_Controller controllers[2];
 };
 
+struct Game_Memory
+{
+	b32 is_initalized;
+	
+	u64 size_permanent_storage;
+	void *permanent_storage;
+
+	u64 size_transient_storage;
+	void *transient_storage;
+};
+
 #if GAME_INTERNAL
 struct Debug_File_Output
 {
@@ -63,3 +82,7 @@ inline Game_Controller *get_game_controller(Game_Input *input, u32 controllerID)
 	GameAssert(controllerID < (u32)array_count_64(input->controllers));
 	return &input->controllers[controllerID];
 }
+
+#define RENDERER_FULL_UPDATE(name) void name(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
+typedef RENDERER_FULL_UPDATE(renderer_update_ptr);
+extern "C" RENDERER_FULL_UPDATE(renderer_full_update);

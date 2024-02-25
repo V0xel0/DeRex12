@@ -27,5 +27,5 @@ IF NOT EXIST .\build mkdir .\build
 pushd .\build
 del *.pdb > NUL 2> NUL
 
-cl.exe %compilerFlags% ../source/Win32_x64_Platform.cpp ../source/Game.cpp ../external/D3D12MemAlloc.cpp /link %dxcLib% %linkerFlags% %linkerLibs%
+cl.exe %compilerFlags% ../source/Win32_x64_Platform.cpp ../source/Renderer.cpp ../external/D3D12MemAlloc.cpp /link %dxcLib% %linkerFlags% %linkerLibs%
 popd
