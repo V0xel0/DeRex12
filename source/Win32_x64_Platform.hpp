@@ -14,11 +14,7 @@
 #pragma warning(disable : 5039)
 #include <windows.h>
 #include <windowsx.h>
-#ifdef _DEBUG
-#include <dxgidebug.h>
-#endif
-#include "d3dx12.h"
-#include <dxgi1_6.h>
+
 #include <timeapi.h>
 #pragma warning( pop )
 

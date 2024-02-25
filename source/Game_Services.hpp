@@ -5,6 +5,7 @@ struct Game_Window
 	void* handle;
 	u32 width;
 	u32 height;
+	b32 is_closed;
 };
 
 struct Game_Key_State

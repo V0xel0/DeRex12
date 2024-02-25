@@ -1,9 +1,4 @@
 #pragma once
-#include <cassert>
-#include "Utils.hpp"
-#include "Math.hpp"
-#include "GameAsserts.hpp"
-#include "Game_Services.hpp"
 
 struct Vertex
 {
