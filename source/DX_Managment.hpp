@@ -68,8 +68,6 @@ namespace DX
 		GPU_Resource vertices_static{};
 		GPU_Resource indices_static{};
 	
-		//D3D12MA::Allocator* dx_allocator = nullptr;
-		
 		[[nodiscard]]
 		u64 signal(ID3D12CommandQueue* command_queue, ID3D12Fence* fence, u64 value)
 		{
@@ -197,10 +195,10 @@ namespace DX
 
 	} // Namespace Internal
 	
+	using namespace Internal;
+	
 	void init_d3d12(void* win_handle, u32 client_width, u32 client_height)
 	{
-		using namespace Internal;
-		
 		IDXGIFactory4* factory = nullptr;
 		u32 factory_flags = 0;
 		auto d = defer([&] { RELEASE_SAFE(factory); });
@@ -261,18 +259,7 @@ namespace DX
 		#ifdef _DEBUG
 		THR(device->QueryInterface(&debug_device));
 		#endif
-		
-		//		 Create D3D12 Allocator
-		//		{
-		//			D3D12MA::ALLOCATOR_DESC alloc_desc
-		//			{
-		//				.pDevice = device,
-		//				.pAdapter = adapter
-		//			};
-		//
-		//			THR(D3D12MA::CreateAllocator(&alloc_desc, &dx_allocator));
-		//		}
-		
+			
 		// Create Command Queue
 		{
 			D3D12_COMMAND_QUEUE_DESC queue_desc 
@@ -357,7 +344,6 @@ namespace DX
 	
 	void create_basic_pipeline()
 	{
-		using namespace Internal;
 		// Create root signature TODO: Take signature directly from compiled shader
 		{
 			D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
@@ -422,8 +408,6 @@ namespace DX
 	
 	void init_static_data(Array_View<Vertex>vertex_data, Array_View<u16>indices_data)
 	{
-		using namespace Internal;
-		
 		auto command_allocator = cmd_allocators_direct[back_buffer_i];
 		THR(cmd_list_direct->Reset(command_allocator, nullptr));
 		
