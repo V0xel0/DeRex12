@@ -56,7 +56,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Game_Input* new_inputs = &game_input_buffer[0];
 	Game_Input* old_inputs = &game_input_buffer[1];
 	
-	renderer_update_ptr *update_renderer = renderer_full_update;
+	app_update_ptr *update_app = app_full_update;
 	
 	while (Win32::g_is_running)
 	{
@@ -96,7 +96,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		game_window.width = new_width;
 		game_window.height = new_height;
 		game_window.is_closed = Win32::g_is_running ? false : true;
-		update_renderer(&game_memory, &game_window, new_inputs);
+		update_app(&game_memory, &game_window, new_inputs);
 		
 		f64 frame_time_ms = Win32::get_elapsed_ms_here(clock, tick_start);
 		

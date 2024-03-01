@@ -84,6 +84,6 @@ inline Game_Controller *get_game_controller(Game_Input *input, u32 controllerID)
 	return &input->controllers[controllerID];
 }
 
-#define RENDERER_FULL_UPDATE(name) void name(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
-typedef RENDERER_FULL_UPDATE(renderer_update_ptr);
-extern "C" RENDERER_FULL_UPDATE(renderer_full_update);
+#define APP_FULL_UPDATE(name) void name(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
+typedef APP_FULL_UPDATE(app_update_ptr);
+extern "C" APP_FULL_UPDATE(app_full_update);

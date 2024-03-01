@@ -94,7 +94,6 @@ namespace DX
 			return value_to_signal;
 		}
 
-
 		template <typename T>
 		[[nodiscard]]
 		GPU_Resource upload_static_data(Array_View<T>data_cpu, ID3D12GraphicsCommandList* cmd_list, ID3D12Device2* device)
