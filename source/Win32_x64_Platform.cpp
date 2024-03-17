@@ -49,7 +49,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		.size_transient_storage = GiB(2),
 		.transient_storage = allocate(&platform_arena, GiB(2))
 	};
-
+	
 	Game_Window game_window { (void*)win_handle, width, height };
 	
 	Game_Input game_input_buffer[2] = {};
