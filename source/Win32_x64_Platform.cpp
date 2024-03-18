@@ -12,9 +12,6 @@
 
 #endif
 
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}
-extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\external\\D3D12\\"; }
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	SYSTEM_INFO windows_info{};
@@ -107,9 +104,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			SetWindowText(win_handle, time_buf); //! WARNING - this might stall with very high fps (0.001ms)!
 		}
 	}
-	//TODO: Rest of Cleanup
-//	RELEASE_SAFE(dx_allocator);
-//	debug_device->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+
 	UnregisterClassA("DeRex12", GetModuleHandle(nullptr));
 	return 0;
 }

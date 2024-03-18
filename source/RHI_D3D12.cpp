@@ -2,6 +2,9 @@
 #include "RHI_D3D12.hpp"
 #include "Render_Data.hpp"
 
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}
+extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\external\\D3D12\\"; }
+
 namespace DX
 {
 	[[nodiscard]]
