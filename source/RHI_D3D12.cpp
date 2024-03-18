@@ -8,26 +8,26 @@ namespace DX
 	internal u64 signal(Context* ctx, u64 value)
 	{
 		u64 value_to_signal = ++value;
-		THR(ctx->queue->Signal(ctx->fence, value_to_signal));
+		THR(ctx->queue->Signal(ctx->fence.ptr, value_to_signal));
 		return value_to_signal;
 	}
 
-	internal void wait_for_fence(ID3D12Fence* fence, u64 value_to_wait, HANDLE event)
+	internal void wait_for_fence(DX::Fence* fence, u64 value_to_wait)
 	{
-		u64 completed_value = fence->GetCompletedValue();
+		u64 completed_value = fence->ptr->GetCompletedValue();
 		if (completed_value < value_to_wait)
 		{
-			THR(fence->SetEventOnCompletion(value_to_wait, event));
-			WaitForSingleObject(event, INFINITE);
+			THR(fence->ptr->SetEventOnCompletion(value_to_wait, fence->fence_event));
+			WaitForSingleObject(fence->fence_event, INFINITE);
 		}
 	}
 
 	[[nodiscard]]
 	internal void wait_for_work(Context* ctx)
 	{
-		u64 value_to_signal = signal(ctx, ctx->fence_counter);
-		wait_for_fence(ctx->fence, value_to_signal, ctx->fence_event);
-		ctx->fence_counter = value_to_signal;
+		u64 value_to_signal = signal(ctx, ctx->fence.fence_counter);
+		wait_for_fence(&ctx->fence, value_to_signal);
+		ctx->fence.fence_counter = value_to_signal;
 	}
 	
 	extern void execute_and_wait(Context* ctx)
@@ -225,9 +225,9 @@ namespace DX
 		}
 		
 		// Create fence
-		THR(state->device.ptr->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence)));
-		ctx->fence_event = CreateEvent(0, false, false, 0);
-		AlwaysAssert(ctx->fence_event && "Failed creation of fence event");
+		THR(state->device.ptr->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
+		ctx->fence.fence_event = CreateEvent(0, false, false, 0);
+		AlwaysAssert(ctx->fence.fence_event && "Failed creation of fence event");
 		
 		// Create Command Allocators
 		for (u32 i = 0; i < count_backbuffers; i++)
@@ -475,13 +475,13 @@ namespace DX
 				THR(swapchain->Present(1, 0));
 				
 				// Signal - through fence_counter when signaling to avoid race condition
-				fence_values[frame_index] = ctx->fence_counter = signal(ctx, ctx->fence_counter);
+				fence_values[frame_index] = ctx->fence.fence_counter = signal(ctx, ctx->fence.fence_counter);
 				
 				// Get next backbuffer - updated on swapchain by Present()
 				frame_index = swapchain->GetCurrentBackBufferIndex();
 				
 				// Wait for frame (n-1), so we are not waiting on 'this' frame
-				wait_for_fence(ctx->fence, fence_values[frame_index], ctx->fence_event);
+				wait_for_fence(&ctx->fence, fence_values[frame_index]);
 			}
 		}
 		

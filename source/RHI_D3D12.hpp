@@ -43,7 +43,9 @@ namespace DX
 {
 	struct Fence
 	{
-
+		ID3D12Fence* ptr;
+		u64 fence_counter;
+		HANDLE fence_event;
 	};
 } // namespace DX
 
@@ -73,11 +75,7 @@ struct Context
 	ID3D12GraphicsCommandList* cmd_list;
 	ID3D12CommandAllocator* cmd_allocators[count_backbuffers]{};
 	
-	ID3D12Fence* fence;
-	u64 fence_counter;
-	HANDLE fence_event;
-	
-//	DX::Fence fence;
+	DX::Fence fence;
 };
  
 struct RHI_State
