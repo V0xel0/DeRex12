@@ -5,14 +5,14 @@
 namespace DX
 {
 	[[nodiscard]]
-	internal u64 signal(Context* ctx, u64 value)
+	internal u64 signal(Context* ctx)
 	{
-		u64 value_to_signal = ++value;
+		u64 value_to_signal = ++ctx->fence.fence_counter;
 		THR(ctx->queue->Signal(ctx->fence.ptr, value_to_signal));
 		return value_to_signal;
 	}
 
-	internal void wait_for_fence(DX::Fence* fence, u64 value_to_wait)
+	internal void sync_with_fence(DX::Fence* fence, u64 value_to_wait)
 	{
 		u64 completed_value = fence->ptr->GetCompletedValue();
 		if (completed_value < value_to_wait)
@@ -25,8 +25,8 @@ namespace DX
 	[[nodiscard]]
 	internal void wait_for_work(Context* ctx)
 	{
-		u64 value_to_signal = signal(ctx, ctx->fence.fence_counter);
-		wait_for_fence(&ctx->fence, value_to_signal);
+		u64 value_to_signal = signal(ctx);
+		sync_with_fence(&ctx->fence, value_to_signal);
 		ctx->fence.fence_counter = value_to_signal;
 	}
 	
@@ -474,14 +474,14 @@ namespace DX
 				// Present current backbuffer
 				THR(swapchain->Present(1, 0));
 				
-				// Signal - through fence_counter when signaling to avoid race condition
-				fence_values[frame_index] = ctx->fence.fence_counter = signal(ctx, ctx->fence.fence_counter);
+				// Signal the end of direct context work for this frame and store its value for later synchronization
+				fence_values[frame_index] = signal(ctx);
 				
-				// Get next backbuffer - updated on swapchain by Present()
+				// Get next backbuffer index - updated on swapchain by Present()
 				frame_index = swapchain->GetCurrentBackBufferIndex();
 				
-				// Wait for frame (n-1), so we are not waiting on 'this' frame
-				wait_for_fence(&ctx->fence, fence_values[frame_index]);
+				// Wait for fence value from frame (n-1) - not waiting on current frame
+				sync_with_fence(&ctx->fence, fence_values[frame_index]);
 			}
 		}
 		
