@@ -23,11 +23,11 @@ namespace DX
 	}
 
 	[[nodiscard]]
-	internal u64 wait_for_work(Context* ctx, u64 value)
+	internal void wait_for_work(Context* ctx)
 	{
-		u64 value_to_signal = signal(ctx, value);
+		u64 value_to_signal = signal(ctx, ctx->fence_counter);
 		wait_for_fence(ctx->fence, value_to_signal, ctx->fence_event);
-		return value_to_signal;
+		ctx->fence_counter = value_to_signal;
 	}
 	
 	extern void execute_and_wait(Context* ctx)
@@ -35,7 +35,7 @@ namespace DX
 		THR(ctx->cmd_list->Close());
 		ID3D12CommandList* const commandLists[] = { ctx->cmd_list };
 		ctx->queue->ExecuteCommandLists(_countof(commandLists), commandLists);
-		ctx->fence_counter = wait_for_work(ctx, ctx->fence_counter);
+		wait_for_work(ctx);
 	}
 	
 	internal IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_point, LPCWSTR target)
@@ -344,7 +344,7 @@ namespace DX
 			width	= new_width;
 			height = new_height;
 			
-			ctx->fence_counter = wait_for_work(ctx, ctx->fence_counter);
+			wait_for_work(ctx);
 			
 			if (rtv_texture[0])
 			{
