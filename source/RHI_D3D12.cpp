@@ -30,7 +30,6 @@ namespace DX
 	{
 		u64 value_to_signal = signal(ctx);
 		sync_with_fence(&ctx->fence, value_to_signal);
-		ctx->fence.fence_counter = value_to_signal;
 	}
 	
 	extern void execute_and_wait(Context* ctx)
