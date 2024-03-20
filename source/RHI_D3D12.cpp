@@ -433,33 +433,35 @@ namespace DX
 				ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
 			}
 			
-			// Populate command list - drawing with default state
+			// Populate command list
 			{
 				// Default state
 				ctx->cmd_list->RSSetViewports(1, get_const_ptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
 				ctx->cmd_list->RSSetScissorRects(1, get_const_ptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
 				ctx->cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
-				// Drawing
-				//command_list->SetPipelineState(pso);
-				ctx->cmd_list->SetGraphicsRootSignature(pipeline_default.root_signature);
-				D3D12_VERTEX_BUFFER_VIEW vb_view_static 
-				{ 
-					.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
-					.SizeInBytes = (UINT)vertices_static.desc.Width,
-					.StrideInBytes = sizeof(Vertex)
-				};
-				ctx->cmd_list->IASetVertexBuffers(0, 1, &vb_view_static);
-				D3D12_INDEX_BUFFER_VIEW ib_view_static
+				// Drawing static data
 				{
-					.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
-					.SizeInBytes = (UINT)indices_static.desc.Width,
-					.Format = DXGI_FORMAT_R16_UINT
-				};
+					//command_list->SetPipelineState(pso);
+					ctx->cmd_list->SetGraphicsRootSignature(pipeline_default.root_signature);
+					D3D12_VERTEX_BUFFER_VIEW vb_view_static 
+					{ 
+						.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
+						.SizeInBytes = (UINT)vertices_static.desc.Width,
+						.StrideInBytes = sizeof(Vertex)
+					};
+					ctx->cmd_list->IASetVertexBuffers(0, 1, &vb_view_static);
+					D3D12_INDEX_BUFFER_VIEW ib_view_static
+					{
+						.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
+						.SizeInBytes = (UINT)indices_static.desc.Width,
+						.Format = DXGI_FORMAT_R16_UINT
+					};
 				
-				ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
-				ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 0, 0);
-				ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
+					ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
+					ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 0, 0);
+					ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
+				}
 			}
 			
 			// Present
