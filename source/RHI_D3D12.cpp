@@ -250,33 +250,10 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	Pipeline create_basic_pipeline(Device* dev)
+	Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path)
 	{
 		auto* device = dev->ptr;
 		Pipeline out{};
-		// Create root signature TODO: Take signature directly from compiled shader
-		{
-			D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc;
-			root_sig_desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_2;
-			D3D12_ROOT_SIGNATURE_DESC2 desc2
-			{
-				.NumParameters = 0,
-				.pParameters = nullptr,
-				.NumStaticSamplers = 0,
-				.pStaticSamplers = nullptr,
-				.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT //TODO: with bindless, will be changed,
-				         // to pull vertex approach without IA calls
-			};
-			root_sig_desc.Desc_1_2 = desc2;
-		
-			ID3DBlob* signature = nullptr;
-			ID3DBlob* error = nullptr;
-			auto d = defer([&] { RELEASE_SAFE(signature); RELEASE_SAFE(error); });
-		
-			THR(D3D12SerializeVersionedRootSignature(&root_sig_desc, &signature, &error)); // Serialized 'signature' could be cached if needed
-			THR(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&out.root_signature)));
-			out.root_signature->SetName(L"Basic root signature");
-		}
 		
 		// Define the vertex input layout.
 		D3D12_INPUT_ELEMENT_DESC ia_layout[] =
@@ -286,14 +263,16 @@ namespace DX
 		};
 		
 		// Compile shaders
-		// TODO: More code compression, caching for results, save pdb's and reflection, compile if new hash
-		LPCWSTR path_shader = L"../source/shaders/simple.hlsl";
-		auto result_ps = compile_shader_default(path_shader, L"simplePS", L"PSMain", L"ps_6_6");
-		auto result_vs = compile_shader_default(path_shader, L"simpleVS", L"VSMain", L"vs_6_6");
+		auto result_ps = compile_shader_default(vs_ps_path, L"simplePS", L"PSMain", L"ps_6_6");
+		auto result_vs = compile_shader_default(vs_ps_path, L"simpleVS", L"VSMain", L"vs_6_6");
 		IDxcBlob* pixel_shader;
 		THR(result_ps->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&pixel_shader), nullptr));
 		IDxcBlob* vertex_shader;
 		THR(result_vs->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&vertex_shader), nullptr));
+		
+		// Create root signature from shader
+		THR(device->CreateRootSignature(0, vertex_shader->GetBufferPointer(), 
+			                            	vertex_shader->GetBufferSize(), IID_PPV_ARGS(&out.root_signature)));
 		
 		// Create default PSO
 		{
@@ -308,8 +287,8 @@ namespace DX
 			pso_desc.SampleMask = UINT_MAX;
 			pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 			pso_desc.NumRenderTargets = 1;
-			pso_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+			pso_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT; // Sync this!
+			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // Sync this!
 			pso_desc.SampleDesc.Count = 1;
 			
 			THR(device->CreateGraphicsPipelineState(&pso_desc, IID_PPV_ARGS(&out.pso)));

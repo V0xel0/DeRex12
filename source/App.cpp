@@ -50,7 +50,7 @@ extern "C" APP_FULL_UPDATE(app_full_update)
 		indices_data.init(&app_state->arena_assets, 0, 1, 2,  0, 3, 1);
 		
 		rhi_init(rhi, window->handle, window->width, window->height);
-		gpu_static->default_pipeline = create_basic_pipeline(device);
+		gpu_static->default_pipeline = create_basic_pipeline(device, L"../source/shaders/simple.hlsl");
 		
 		gpu_static->verts  = upload_static_data(vertex_data,  ctx_direct, device);
 		gpu_static->indices = upload_static_data(indices_data, ctx_direct, device);

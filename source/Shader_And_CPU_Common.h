@@ -13,4 +13,5 @@ struct Constant_Data_Frame
 struct Constant_Data_Draw
 {
 	Vec3 albedo;
+	f32 pad;
 };

@@ -12,7 +12,8 @@
  *	5) Synchro functions, parameters abstraction
  *	6) Shader abstraction
  *	7) Render() split
- *	8) Shader compilation improvements: reflection, signature from shader, output debug
+ * 	8) Shader compilation improvements: reflection, signature from shader, output debug
+ * 	9) Shader creation code compression, caching for results, save pdb's and reflection, recompile if new hash
  * 
  * */
 
@@ -106,7 +107,7 @@ namespace DX
 	extern void render_frame(RHI_State* state, GPU_Data_Static* gpu_static, u32 new_width, u32 new_height);
 	extern void execute_and_wait(Context* ctx);
 	
-	extern Pipeline create_basic_pipeline(Device* dev);
+	extern Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path);
 	
 	template <typename T>
 	[[nodiscard]]
