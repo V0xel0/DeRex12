@@ -5,3 +5,4 @@
 #define Vec3 float3
 #define Vec4 float4
 #define Mat4 float4x4
+#define Trans4 float4x4

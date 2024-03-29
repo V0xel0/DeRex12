@@ -5,6 +5,9 @@
 
 /* TODOs
  * 
+ * 	0) Consider moving whole RHI to different TLU or part of platform
+ * 				ideally just get "what to render" (unified msg) from application and own RHI-state memory
+ * 						basically similar in desing to application itself
  *	1) Pipeline abstraction - bundle with root signature
  *	2) Heaps + descriptors creation & abstraction
  *	3) Pools + handles

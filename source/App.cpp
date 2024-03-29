@@ -18,13 +18,13 @@ using namespace DX;
 #include "Render_Data.hpp"
 #include "App.hpp"
 
-extern "C" APP_FULL_UPDATE(app_full_update)
+extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
 {
 	App_State* app_state = (App_State*)memory->permanent_storage;
 	auto* rhi 				= &app_state->rhi;
 	auto* device 			= &app_state->rhi.device;
 	auto* ctx_direct 	= &app_state->rhi.ctx_direct;
-	Data_To_RHI* gpu_static 	= &app_state->gpu_static;
+	auto* data_to_rhi = &app_state->data_for_rhi;
 	
 	if (!memory->is_initalized)
 	{
@@ -50,17 +50,17 @@ extern "C" APP_FULL_UPDATE(app_full_update)
 		indices_data.init(&app_state->arena_assets, 0, 1, 2,  0, 3, 1);
 		
 		rhi_init(rhi, window->handle, window->width, window->height);
-		gpu_static->default_pipeline = create_basic_pipeline(device, L"../source/shaders/simple.hlsl");
+		data_to_rhi->default_pipeline = create_basic_pipeline(device, L"../source/shaders/simple.hlsl");
 		
-		gpu_static->verts  = upload_static_data(vertex_data,  ctx_direct, device);
-		gpu_static->indices = upload_static_data(indices_data, ctx_direct, device);
+		data_to_rhi->verts  = upload_static_data(vertex_data,  ctx_direct, device);
+		data_to_rhi->indices = upload_static_data(indices_data, ctx_direct, device);
 		execute_and_wait(ctx_direct);
 		
 		arena_reset(&app_state->arena_assets);
 		memory->is_initalized = true;
 	}
 	
-	gpu_static->time_passed_ms = window->time_passed;
+	data_to_rhi->time_passed_ms = window->time_passed;
 	
-	render_frame(rhi, gpu_static, window->width, window->height);
+	render_frame(rhi, data_to_rhi, window->width, window->height);
 }
