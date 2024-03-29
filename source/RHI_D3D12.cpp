@@ -40,6 +40,7 @@ namespace DX
 		wait_for_work(ctx);
 	}
 	
+	[[nodiscard]]
 	internal IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_point, LPCWSTR target)
 	{
 		LPCWSTR args[] =
@@ -97,6 +98,43 @@ namespace DX
 		{ wprintf(L"Compilation Failed\n"); }
 			
 		return result;
+	}
+	
+	[[nodiscard]]
+	internal Memory_Heap create_memory_heap(Device* dev, u64 max_bytes, D3D12_HEAP_TYPE type)
+	{
+		auto* device = dev->ptr;
+		Memory_Heap out{};
+		
+		THR(device->CreateCommittedResource(get_const_ptr<D3D12_HEAP_PROPERTIES>({ .Type = type }),
+		                                    D3D12_HEAP_FLAG_NONE,
+		                                    get_const_ptr(CD3DX12_RESOURCE_DESC::Buffer(max_bytes)),
+		                                    D3D12_RESOURCE_STATE_GENERIC_READ,
+		                                    nullptr,
+		                                    IID_PPV_ARGS(&out.heap)));
+		
+		THR(out.heap->Map(0, 
+		                  get_const_ptr<D3D12_RANGE>({ .Begin = 0, .End = 0 }), 
+		                  (void**) &out.heap_arena.base));
+		
+		out.gpu_base = out.heap->GetGPUVirtualAddress();
+		out.heap_arena.max_size = max_bytes;
+		
+		return out;
+	}
+	
+	[[nodiscard]]
+	internal auto push_to_gpu_memory(Memory_Heap* heap, u64 size)
+	{
+		struct { u8* addr_cpu; D3D12_GPU_VIRTUAL_ADDRESS addr_gpu; }out;
+		out.addr_cpu = (u8*)allocate(&heap->heap_arena, size, g_alloc_alignment);
+		out.addr_gpu = heap->gpu_base + heap->heap_arena.prev_offset; //prev offset was curr offset in cpu alloc
+		return out;
+	}
+	
+	internal void reset_gpu_memory(Memory_Heap* heap)
+	{
+		arena_reset(&heap->heap_arena);
 	}
 	
 	extern void rhi_init(RHI_State* state, void* win_handle, u32 client_width, u32 client_height)
@@ -206,7 +244,7 @@ namespace DX
 			D3D12_DESCRIPTOR_HEAP_DESC rtv_desc
 			{
 				.Type						= D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-				.NumDescriptors	= count_backbuffers,
+				.NumDescriptors	= g_count_backbuffers,
 				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 				.NodeMask				= 0
 			};
@@ -226,13 +264,21 @@ namespace DX
 			THR(state->device.ptr->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&state->dsv_heap)));
 		}
 		
+		// Create heaps
+		{
+			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
+			{
+				state->upload_heaps[frame_i] = create_memory_heap(&state->device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
+			}
+		}
+		
 		// Create fence
 		THR(state->device.ptr->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
 		ctx->fence.fence_event = CreateEvent(0, false, false, 0);
 		AlwaysAssert(ctx->fence.fence_event && "Failed creation of fence event");
 		
 		// Create Command Allocators
-		for (u32 i = 0; i < count_backbuffers; i++)
+		for (u32 i = 0; i < g_count_backbuffers; i++)
 		{
 			THR(state->device.ptr->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
 			                                   IID_PPV_ARGS(&ctx->cmd_allocators[i])));
@@ -250,7 +296,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path)
+	extern Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path)
 	{
 		auto* device = dev->ptr;
 		Pipeline out{};
@@ -296,7 +342,7 @@ namespace DX
 		return out;
 	}
 	
-	extern void render_frame(RHI_State* state, GPU_Data_Static* gpu_static, u32 new_width, u32 new_height)
+	extern void render_frame(RHI_State* state, Data_To_RHI* gpu_static, u32 new_width, u32 new_height)
 	{
 		// TEMPORARY helper autos
 		auto* ctx 		= &state->ctx_direct; // for now only direct context
@@ -329,7 +375,7 @@ namespace DX
 			
 			if (rtv_texture[0])
 			{
-				for (u32 i = 0; i < count_backbuffers; i++)
+				for (u32 i = 0; i < g_count_backbuffers; i++)
 				{
 					rtv_texture[i]->Release();
 					rtv_texture[i] = nullptr;
@@ -342,14 +388,14 @@ namespace DX
 				// Resize swap chain
 				DXGI_SWAP_CHAIN_DESC swapchain_desc{};
 				THR(swapchain->GetDesc(&swapchain_desc));
-				THR(swapchain->ResizeBuffers(count_backbuffers, width, height, 
+				THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
 				                             swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
 			
 				frame_index = swapchain->GetCurrentBackBufferIndex();
 			
 				// Create/Update RTV textures
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
-				for (u32 i = 0; i < count_backbuffers; i++)
+				for (u32 i = 0; i < g_count_backbuffers; i++)
 				{
 					THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
 					device->CreateRenderTargetView(rtv_texture[i], nullptr, rtv_handle);
@@ -392,6 +438,7 @@ namespace DX
 		{
 			auto cmd_alloc = ctx->cmd_allocators[frame_index];
 			auto backbuffer = rtv_texture[frame_index];
+			auto* upload_heap = &state->upload_heaps[frame_index];
 			
 			THR(cmd_alloc->Reset());
 			// Reset current command list taken from current command allocator
@@ -419,10 +466,23 @@ namespace DX
 				ctx->cmd_list->RSSetScissorRects(1, get_const_ptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
 				ctx->cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
+				// Upload per frame constants
+				D3D12_GPU_VIRTUAL_ADDRESS gpu_buffer_addr{};
+				{
+					const auto [cpu_addr, gpu_addr] = push_to_gpu_memory(upload_heap, sizeof(Constant_Data_Frame));
+					gpu_buffer_addr = gpu_addr;
+					Constant_Data_Frame* frame_consts = (Constant_Data_Frame*)cpu_addr;
+					
+					f32 pulse = (f32)(std::sin(gpu_static->time_passed_ms / 300) + 1) / 2;
+					frame_consts->light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 1.0f });
+					frame_consts->light_col = { pulse, pulse, pulse, 1.0f };
+				}
+				
 				// Drawing static data
 				{
 					//command_list->SetPipelineState(pso);
 					ctx->cmd_list->SetGraphicsRootSignature(pipeline_default.root_signature);
+					ctx->cmd_list->SetGraphicsRootConstantBufferView(1, gpu_buffer_addr);
 					D3D12_VERTEX_BUFFER_VIEW vb_view_static 
 					{ 
 						.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
@@ -465,6 +525,8 @@ namespace DX
 				
 				// Wait for fence value from frame (n-1) - not waiting on current frame
 				sync_with_fence(&ctx->fence, fence_values[frame_index]);
+				// Upload heap from frame (n-1) is safe to reset cause work from that frame has finished
+				reset_gpu_memory(&state->upload_heaps[frame_index]);
 			}
 		}
 		

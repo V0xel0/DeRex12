@@ -7,7 +7,7 @@ struct Vertex
 	lib::Vec4 color;
 };
 
-struct GPU_Data_Static
+struct Data_To_RHI
 {
 	GPU_Resource verts;
 	GPU_Resource indices;
@@ -16,4 +16,5 @@ struct GPU_Data_Static
 	
 	Constant_Data_Frame cb_frame;
 	Constant_Data_Draw cb_draw;
+	f64 time_passed_ms;
 };

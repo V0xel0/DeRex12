@@ -3,6 +3,7 @@
 struct Game_Window
 {
 	void* handle;
+	f64 time_passed;
 	u32 width;
 	u32 height;
 	b32 is_closed;

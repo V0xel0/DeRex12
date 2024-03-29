@@ -8,6 +8,7 @@ using namespace lib;
 struct Constant_Data_Frame
 {
 	Vec4 light_pos;
+	Vec4 light_col;
 };
 
 struct Constant_Data_Draw

@@ -24,7 +24,7 @@ extern "C" APP_FULL_UPDATE(app_full_update)
 	auto* rhi 				= &app_state->rhi;
 	auto* device 			= &app_state->rhi.device;
 	auto* ctx_direct 	= &app_state->rhi.ctx_direct;
-	auto* gpu_static 	= &app_state->gpu_static;
+	Data_To_RHI* gpu_static 	= &app_state->gpu_static;
 	
 	if (!memory->is_initalized)
 	{
@@ -59,6 +59,8 @@ extern "C" APP_FULL_UPDATE(app_full_update)
 		arena_reset(&app_state->arena_assets);
 		memory->is_initalized = true;
 	}
+	
+	gpu_static->time_passed_ms = window->time_passed;
 	
 	render_frame(rhi, gpu_static, window->width, window->height);
 }

@@ -29,5 +29,6 @@ PSInput VSMain(in float4 position : POSITION, in float4 color : COLOR)
 [RootSignature(RootSignatureBasic)]
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return input.color;
+	//return input.color;
+	return cb_per_frame.light_col * input.color;
 }

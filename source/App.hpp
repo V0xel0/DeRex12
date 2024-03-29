@@ -16,5 +16,5 @@ struct App_State
 	Alloc_Arena arena_assets;
 	
 	RHI_State rhi;
-	GPU_Data_Static gpu_static;
+	Data_To_RHI gpu_static;
 };

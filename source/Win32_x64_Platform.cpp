@@ -47,13 +47,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		.transient_storage = allocate(&platform_arena, GiB(2))
 	};
 	
-	Game_Window game_window { (void*)win_handle, width, height };
+	Game_Window game_window { (void*)win_handle, 0.0f, width, height };
 	
 	Game_Input game_input_buffer[2] = {};
 	Game_Input* new_inputs = &game_input_buffer[0];
 	Game_Input* old_inputs = &game_input_buffer[1];
 	
 	app_update_ptr *update_app = app_full_update;
+	u64 ticks_loop_start = Win32::get_performance_ticks();
 	
 	while (Win32::g_is_running)
 	{
@@ -93,6 +94,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		game_window.width = new_width;
 		game_window.height = new_height;
 		game_window.is_closed = Win32::g_is_running ? false : true;
+		game_window.time_passed = Win32::get_elapsed_ms_here(clock, ticks_loop_start);
 		update_app(&game_memory, &game_window, new_inputs);
 		
 		f64 frame_time_ms = Win32::get_elapsed_ms_here(clock, tick_start);
