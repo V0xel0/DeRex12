@@ -23,13 +23,11 @@
  * 
  * */
 
+#include "d3dx12.h"
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
-#include "d3dx12.h"
 #include <dxgi1_6.h>
-#include <dxcapi.h>       
-#include <d3d12shader.h>
 
 #ifdef _DEBUG
 inline void THR(HRESULT hr) {
@@ -134,7 +132,7 @@ namespace DX
 	
 	template <typename T>
 	[[nodiscard]]
-	GPU_Resource upload_static_data(Array_View<T>data_cpu, Context* ctx, Device* dev)
+	GPU_Resource upload_static_data(Device* dev, Context* ctx, Array_View<T>data_cpu)
 	{
 		auto cmd_list = ctx->cmd_list;
 		auto device = dev->ptr;

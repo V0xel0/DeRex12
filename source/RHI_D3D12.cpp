@@ -1,5 +1,13 @@
 #include "Utils.hpp"
+#include "Allocators.hpp"
+#include "GameAsserts.hpp"
+#include "Views.hpp"
+#include "Math.hpp"
+
 #include "RHI_D3D12.hpp"
+#include <dxcapi.h>       
+#include <d3d12shader.h>
+
 #include "Render_Data.hpp"
 
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}

@@ -10,7 +10,6 @@
 #define RHI_D3D12
 #ifdef RHI_D3D12
 #include "RHI_D3D12.hpp"
-#include "RHI_D3D12.cpp"
 using namespace DX;
 #endif
 
@@ -52,8 +51,8 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		rhi_init(rhi, window->handle, window->width, window->height);
 		data_to_rhi->default_pipeline = create_basic_pipeline(device, L"../source/shaders/simple.hlsl");
 		
-		data_to_rhi->verts  = upload_static_data(vertex_data,  ctx_direct, device);
-		data_to_rhi->indices = upload_static_data(indices_data, ctx_direct, device);
+		data_to_rhi->verts		=		upload_static_data(device, ctx_direct, vertex_data);
+		data_to_rhi->indices	=		upload_static_data(device, ctx_direct, indices_data);
 		execute_and_wait(ctx_direct);
 		
 		arena_reset(&app_state->arena_assets);
