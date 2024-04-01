@@ -5,14 +5,12 @@
 
 /* TODOs
  * 
- * 	0) Consider moving whole RHI to different TLU or part of platform
+ * 	0) Consider moving whole RHI to different TU or part of platform
  * 				ideally just get "what to render" (unified msg) from application and own RHI-state memory
  * 						basically similar in desing to application itself
- *	1) Pipeline abstraction - bundle with root signature
  *	2) Heaps + descriptors creation & abstraction
  *	3) Pools + handles
  *	4) Data manager for GPU/CPU renderable resources
- *	5) Synchro functions, parameters abstraction
  *	6) Shader abstraction
  *	7) Render() split
  * 	8) Shader compilation improvements: reflection, signature from shader, output debug
@@ -20,7 +18,9 @@
  * 10) "Pipeline" struct may be changed to binary relation 1..n of '1' root signature to 'n' PSOs
  * 				This could be done as 2D array instead of generic solution like: https://github.com/RonPieket/BinaryRelations
  * 11) Maybe also reset gpu_memory in "execute_and_wait"?
- * 
+ * 12) upload_static_data has to be changed to be a data thats const per "level" and needs upload 
+ * 			to default heap. In data sent from app to rhi then we would have 2 streams of data depending
+ * 			on frequency -> or streams of render passses later
  * */
 
 #include "d3dx12.h"

@@ -55,11 +55,39 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		data_to_rhi->indices	=		upload_static_data(device, ctx_direct, indices_data);
 		execute_and_wait(ctx_direct);
 		
+		app_state->camera = { .pos = { 2.0f, 0.0f, 2.0f }, .yaw = PI32 + PI32 / 4.0f };
+		
 		arena_reset(&app_state->arena_assets);
 		memory->is_initalized = true;
 	}
 	
-	data_to_rhi->time_passed_ms = window->time_passed;
+	// Modyfing/Creating data for RHI
+	{
+		auto cam_yaw = app_state->camera.yaw;
+		auto cam_pitch = app_state->camera.pitch;
+		// Could also multiply pre-setted forward vec with rotation matrix around X(from pitch) and Y(from yaw)
+		app_state->camera.forward = lib::normalize( lib::Vec3{
+		                            .x = cos(cam_yaw) * cos(cam_pitch),
+																.y = sin(cam_pitch),
+																.z = sin(cam_yaw) * cos(cam_pitch)
+		});
+	
+		lib::Mat4 mat_model = lib::create_translate({-0.33f, 0.0f, 0.0f});
+		mat_model = mat_model * lib::create_rotation_z((f32)window->time_ms / 1000.0f);
+		
+		f32 pulse = (f32)(std::sin((f32)window->time_ms / 300) + 1) / 2;
+		
+		// Pushing data
+		{
+			// General data
+			data_to_rhi->time_passed_ms = window->time_ms;
+			// Frame constants
+			data_to_rhi->cb_frame.light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 1.0f });
+			data_to_rhi->cb_frame.light_col = { pulse, pulse, pulse, 1.0f };
+			// Draw constants
+			data_to_rhi->cb_draw.obj_to_world = mat_model;
+		}
+	}
 	
 	render_frame(rhi, data_to_rhi, window->width, window->height);
 }

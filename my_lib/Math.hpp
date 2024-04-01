@@ -799,6 +799,107 @@ namespace lib
 
 		return out;
 	}
+	
+	[[nodiscard]]
+	inline Mat4 create_translate(Vec3 translation)
+	{
+		Mat4 out = create_diagonal_matrix();
+		out.e[3][0] = translation.x;
+		out.e[3][1] = translation.y;
+		out.e[3][2] = translation.z;
+		
+		return out;
+	}
+	
+	inline Mat4 create_rotation(Vec3 axis, f32 angle)
+	{
+    Mat4 out = create_diagonal_matrix();
+
+    axis = normalize(axis);
+    f32 sin_theta = sin(angle);
+    f32 cos_theta = cos(angle);
+    f32 cos_val = 1.0f - cos_theta;
+
+    out.e[0][0] = (axis.x * axis.x * cos_val) + cos_theta;
+    out.e[0][1] = (axis.x * axis.y * cos_val) + (axis.z * sin_theta);
+    out.e[0][2] = (axis.x * axis.z * cos_val) - (axis.y * sin_theta);
+
+    out.e[1][0] = (axis.y * axis.x * cos_val) - (axis.z * sin_theta);
+    out.e[1][1] = (axis.y * axis.y * cos_val) + cos_theta;
+    out.e[1][2] = (axis.y * axis.z * cos_val) + (axis.x * sin_theta);
+
+    out.e[2][0] = (axis.z * axis.x * cos_val) + (axis.y * sin_theta);
+    out.e[2][1] = (axis.z * axis.y * cos_val) - (axis.x * sin_theta);
+    out.e[2][2] = (axis.z * axis.z * cos_val) + cos_theta;
+
+    return out;
+	}
+	
+	inline Mat4 create_rotation_x(f32 angle)
+	{
+    Mat4 out = create_diagonal_matrix();
+
+    f32 sin_theta = sin(angle);
+    f32 cos_theta = cos(angle);
+
+    out.e[0][0] = 1.0f;
+    out.e[0][1] = 0.0f;
+    out.e[0][2] = 0.0f;
+
+    out.e[1][0] = 0.0f;
+    out.e[1][1] = cos_theta;
+    out.e[1][2] = sin_theta;
+
+    out.e[2][0] = 0.0f;
+    out.e[2][1] = -sin_theta;
+    out.e[2][2] = cos_theta;
+
+    return out;
+	}
+	
+	inline Mat4 create_rotation_y(f32 angle)
+	{
+    Mat4 out = create_diagonal_matrix();
+
+    f32 sin_theta = sin(angle);
+    f32 cos_theta = cos(angle);
+
+    out.e[0][0] = cos_theta;
+    out.e[0][1] = 0.0f;
+    out.e[0][2] = -sin_theta;
+
+    out.e[1][0] = 0.0f;
+    out.e[1][1] = 1.0f;
+    out.e[1][2] = 0.0f;
+
+    out.e[2][0] = sin_theta;
+    out.e[2][1] = 0.0f;
+    out.e[2][2] = cos_theta;
+
+    return out;
+	}
+	
+	inline Mat4 create_rotation_z(f32 angle)
+	{
+    Mat4 out = create_diagonal_matrix();
+
+    f32 sin_theta = sin(angle);
+    f32 cos_theta = cos(angle);
+
+    out.e[0][0] = cos_theta;
+    out.e[0][1] = sin_theta;
+    out.e[0][2] = 0.0f;
+
+    out.e[1][0] = -sin_theta;
+    out.e[1][1] = cos_theta;
+    out.e[1][2] = 0.0f;
+
+    out.e[2][0] = 0.0f;
+    out.e[2][1] = 0.0f;
+    out.e[2][2] = 1.0f;
+
+    return out;
+	}
 
 	inline Mat4 inverse(const Mat4 a)
 	{
@@ -877,7 +978,7 @@ namespace lib
 
 		return out;
 	}
-
+	
 	//? Based on https://lxjk.github.io/2017/09/03/Fast-4x4-Matrix-Inverse-with-SSE-SIMD-Explained.html
 	//? Basically divide each column axis by its length squared then transpose, in implemnetation transpose is done first to have
 	//? data already prepared for SIMD dots for length calculation. 

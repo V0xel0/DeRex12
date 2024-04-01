@@ -20,7 +20,7 @@ PSInput VSMain(in float4 position : POSITION, in float4 color : COLOR)
 {
 	PSInput result;
  
-	result.position = position;
+	result.position = mul(cb_per_draw.obj_to_world, position);
 	result.color = color;
  
 	return result;
