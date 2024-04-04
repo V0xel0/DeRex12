@@ -5,8 +5,8 @@
 
 #include "Utils.hpp"
 
-//TODO: Mat4 basic operations: Basics, Det, Inverse (transform, basic, normal), Adjugate, Transpose, Unit
-//TODO: Mat4 CG operations: Look_At, Projection, Rotations, Scale, Ssin_tew, Translation, Normal M, Inverse normal M, 
+//TODO: Mat4 basic operations: Basics, Det, Inverse (transform, basic, normal), Adjugate
+//TODO: Mat4 CG operations: Normal M, Inverse normal M, 
 //TODO: Lerp, ceil, floor, round, trunc with vectors
 //TODO: quaternions (angle and other), quaternion to rotation mat4 (check insomniac paper), and mat4 to quaternion
 //TODO: Euler angles
@@ -21,6 +21,8 @@
 #undef min
 #undef near
 #undef far
+
+// Convention: RH, Y UP
 
 namespace lib
 {
@@ -40,6 +42,7 @@ namespace lib
 	{
 		__m128 temp = _mm_set_ss(f);
 		temp = _mm_sqrt_ss(temp);
+		
 		return _mm_cvtss_f32(temp);
 	}
 
@@ -47,6 +50,7 @@ namespace lib
 	{
 		__m128 temp = _mm_set_ss(f);
 		temp = _mm_rsqrt_ss(temp);
+		
 		return _mm_cvtss_f32(temp);
 	}
 
@@ -152,6 +156,7 @@ namespace lib
 		{
 			x += b.x;
 			y += b.y;
+			
 			return *this;
 		}
 
@@ -159,6 +164,7 @@ namespace lib
 		{
 			x *= t;
 			y *= t;
+			
 			return *this;
 		}
 	};
@@ -219,12 +225,14 @@ namespace lib
 	inline Vec2 normalize(const Vec2 a) 
 	{
 		Vec2 out{};
+		
 		f32 length = length_vec(a);
 		if (length != 0.0f)
 		{
 			f32 multi = 1.0f / length;
 			out = { a.x * multi, a.y * multi };
 		}
+		
 		return out;
 	}
 
@@ -256,6 +264,7 @@ namespace lib
 	inline Vec2 refract(const Vec2 a, const Vec2 b, const f32 ratio)
 	{
 		Vec2 out{};
+		
 		f32 cos_i = -dot(a, b);
 		f32 sin_t = (ratio * ratio) * ( 1.0f - (cos_i * cos_i) );
 
@@ -302,7 +311,7 @@ namespace lib
 
 	inline f32 reject_length(const Vec2 a, const Vec2 b)
 	{
-		return  fabs( perp_dot(a, b) ) / length_vec(b);
+		return fabs( perp_dot(a, b) ) / length_vec(b);
 	}
 
 	union Vec3 
@@ -334,6 +343,7 @@ namespace lib
 			x += other.x;
 			y += other.y;
 			z += other.z;
+			
 			return *this;
 		}
 
@@ -342,6 +352,7 @@ namespace lib
 			x *= t;
 			y *= t;
 			z *= t;
+			
 			return *this;
 		}
 	};
@@ -402,6 +413,7 @@ namespace lib
 	inline Vec3 normalize(const Vec3 a) 
 	{
 		Vec3 out{};
+		
 		f32 length = length_vec(a);
 		if (length != 0.0f)
 		{
@@ -431,6 +443,7 @@ namespace lib
 	inline Vec3 refract(const Vec3 a, const Vec3 b, const f32 ratio)
 	{
 		Vec3 out{};
+		
 		f32 cos_i = -dot(a, b);
 		f32 sin_t = (ratio * ratio) * ( 1.0f - (cos_i * cos_i) );
 
@@ -469,7 +482,7 @@ namespace lib
 
 	inline f32 reject_length(const Vec3 a, const Vec3 b)
 	{
-		return  length_vec( cross(a, b) ) / length_vec(b);
+		return length_vec( cross(a, b) ) / length_vec(b);
 	}
 
 	//? For 3D CG, Vec4 is assumed to behave like Vec3 in homogeneous space, 
@@ -490,7 +503,6 @@ namespace lib
 
 		struct
 		{
-			
 			Vec3 rgb;
 			f32 a;
 		};
@@ -510,12 +522,14 @@ namespace lib
 		{ 
 			__m128 single = _mm_set_ps1(t);
 			this->simd = _mm_div_ps(this->simd, single);
+			
 			return *this; 
 		}
 
 		Vec4& operator+=(const Vec4 other) 
 		{
 			this->simd = _mm_add_ps(this->simd, other.simd);
+			
 			return *this;
 		}
 
@@ -523,6 +537,7 @@ namespace lib
 		{
 			__m128 single = _mm_set_ps1(t);
 			this->simd = _mm_mul_ps(this->simd, single);
+			
 			return *this;
 		}
 	};
@@ -591,12 +606,14 @@ namespace lib
 	inline Vec4 normalize(const Vec4 a)
 	{ 
 		Vec4 out{};
+		
 		f32 length = length_vec(a);
 		if (length != 0.0f)
 		{
 			__m128 single = _mm_set_ps1(1.0f / length);
 			out.simd = _mm_mul_ps(a.simd, single);
 		}
+		
 		return out;
 	}
 
@@ -614,6 +631,7 @@ namespace lib
 		__m128 tmp2 = _mm_mul_ps(tmp0, b.simd);
 		__m128 tmp3 = _mm_mul_ps(tmp0, tmp1);
 		__m128 tmp4 = _mm_shuffle_ps(tmp2, tmp2, _MM_SHUFFLE(3,0,2,1));
+		
 		return Vec4 { .simd = _mm_sub_ps(tmp3, tmp4) };
 	}
 
@@ -679,6 +697,7 @@ namespace lib
 		inline Mat4 operator-() const 
 		{
 			Mat4 out{};
+			
 			out.columns[0] = _mm_xor_ps(columns[0], _mm_set_ps1(-0.f) );
 			out.columns[1] = _mm_xor_ps(columns[1], _mm_set_ps1(-0.f) );
 			out.columns[2] = _mm_xor_ps(columns[2], _mm_set_ps1(-0.f) );
@@ -705,6 +724,7 @@ namespace lib
 	inline Mat4 operator+(const Mat4 a, const Mat4 b) 
 	{
 		Mat4 out{};
+		
 		out.columns[0] = _mm_add_ps(a.columns[0], b.columns[0]);
 		out.columns[1] = _mm_add_ps(a.columns[1], b.columns[1]);
 		out.columns[2] = _mm_add_ps(a.columns[2], b.columns[2]);
@@ -716,6 +736,7 @@ namespace lib
 	inline Mat4 operator-(const Mat4 a, const Mat4 b) 
 	{
 		Mat4 out{};
+		
 		out.columns[0] = _mm_sub_ps(a.columns[0], b.columns[0]);
 		out.columns[1] = _mm_sub_ps(a.columns[1], b.columns[1]);
 		out.columns[2] = _mm_sub_ps(a.columns[2], b.columns[2]);
@@ -729,6 +750,7 @@ namespace lib
 	inline __m128 linear_combination(const Mat4 a, __m128 b)
 	{
 		__m128 out{};
+		
 		out = _mm_mul_ps( a.columns[0], _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0) ) );
 		out = _mm_add_ps( out, _mm_mul_ps(a.columns[1], _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1) ) ) );
 		out = _mm_add_ps( out, _mm_mul_ps(a.columns[2], _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2) ) ) );
@@ -745,6 +767,7 @@ namespace lib
 	inline Mat4 operator*(const Mat4 a, const Mat4 b) 
 	{
 		Mat4 out{};
+		
 		out.columns[0] = linear_combination(a, b.columns[0]);
 		out.columns[1] = linear_combination(a, b.columns[1]);
 		out.columns[2] = linear_combination(a, b.columns[2]);
@@ -807,6 +830,7 @@ namespace lib
 	inline Mat4 create_diagonal_matrix(const f32 val = 1.0f)
 	{
 		Mat4 out{};
+		
 		out.e[0][0] = val;
 		out.e[1][1] = val;
 		out.e[2][2] = val;
@@ -819,6 +843,7 @@ namespace lib
 	inline Mat4 create_translate(Vec3 translation)
 	{
 		Mat4 out = create_diagonal_matrix();
+		
 		out.e[3][0] = translation.x;
 		out.e[3][1] = translation.y;
 		out.e[3][2] = translation.z;
@@ -920,9 +945,45 @@ namespace lib
 	{
 		Mat4 out{};
 		
-		Vec3 forward = normalize(eye - target);
-		Vec3 right = normalize(cross(up, forward));
-		Vec3 upward = cross(forward, right);
+		Vec3 forward	= normalize(eye - target);
+		Vec3 right		= normalize(cross(up, forward));
+		Vec3 upward		= cross(forward, right);
+		
+		out.e[0][0] = right.x;
+    out.e[0][1] = upward.x;
+    out.e[0][2] = forward.x;
+    out.e[0][3] = 0.0f;
+
+    out.e[1][0] = right.y;
+    out.e[1][1] = upward.y;
+    out.e[1][2] = forward.y;
+    out.e[1][3] = 0.0f;
+
+    out.e[2][0] = right.z;
+    out.e[2][1] = upward.z;
+    out.e[2][2] = forward.z;
+    out.e[2][3] = 0.0f;
+
+    out.e[3][0] = -dot(right, eye);
+    out.e[3][1] = -dot(upward, eye);
+    out.e[3][2] = -dot(forward, eye);
+    out.e[3][3] = 1.0f;
+		
+		return out;
+	}
+	
+	inline Mat4 create_fps_view(Vec3 eye, f32 pitch, f32 yaw)
+	{
+		Mat4 out{};
+		
+		f32 cos_pitch = cos(pitch);
+    f32 sin_pitch = sin(pitch);
+    f32 cos_yaw 	= cos(yaw);
+    f32 sin_yaw 	= sin(yaw);
+		
+		Vec3 forward	= {cos_yaw, 0.0f, -sin_yaw};
+		Vec3 right		= {sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch};
+		Vec3 upward		= {sin_yaw * cos_pitch, -sin_pitch, cos_pitch * cos_yaw};
 		
 		out.e[0][0] = right.x;
     out.e[0][1] = upward.x;
@@ -973,6 +1034,7 @@ namespace lib
 	inline __m128 trans_linear_combination(const Mat4 a, __m128 b)
 	{
 		__m128 out{};
+		
 		out = _mm_mul_ps( a.columns[0], _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0) ) );
 		out = _mm_add_ps( out, _mm_mul_ps(a.columns[1], _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1) ) ) );
 		out = _mm_add_ps( out, _mm_mul_ps(a.columns[2], _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2) ) ) );
@@ -984,6 +1046,7 @@ namespace lib
 	inline Vec3 mul_trans_vec(const Mat4 a, const Vec3 p)
 	{
 		Vec4 out{};
+		
 		__m128 converted = _mm_set_ps( 0.0f, p.z, p.y, p.x );
 		out.simd = trans_linear_combination(a, converted);
 
@@ -994,6 +1057,7 @@ namespace lib
 	inline Vec3 mul_trans_point(const Mat4 a, const Vec3 p)
 	{
 		Vec4 out{};
+		
 		__m128 con = _mm_set_ps( 1.0f, p.z, p.y, p.x );
 		out.simd = _mm_mul_ps( a.columns[0], _mm_shuffle_ps(con, con, _MM_SHUFFLE(0, 0, 0, 0) ) );
 		out.simd = _mm_add_ps( out.simd, _mm_mul_ps(a.columns[1], _mm_shuffle_ps(con, con, _MM_SHUFFLE(1, 1, 1, 1) ) ) );
@@ -1007,6 +1071,7 @@ namespace lib
 	inline Mat4 mul_trans(const Mat4 a, const Mat4 b)
 	{
 		Mat4 out{};
+		
 		out.columns[0] = trans_linear_combination(a, b.columns[0]);
 		out.columns[1] = trans_linear_combination(a, b.columns[1]);
 		out.columns[2] = trans_linear_combination(a, b.columns[2]);
