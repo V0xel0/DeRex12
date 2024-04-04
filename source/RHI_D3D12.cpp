@@ -15,6 +15,9 @@ extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\extern
 
 namespace DX
 {
+	internal constexpr u32 g_alloc_alignment = 256;
+	internal constexpr u64 g_upload_heap_max_size = MiB(20);
+	
 	[[nodiscard]]
 	internal u64 signal(Context* ctx)
 	{

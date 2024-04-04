@@ -35,15 +35,15 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		// Static data CPU creation
 		Array_View<Vertex>vertex_data{};
 		vertex_data.init(&app_state->arena_assets, 
-		                 Vertex{ {	-0.5f, 0.5f, 0.5f, 1.0f },	{ 1.0f, 0.0f, 0.0f, 1.0f } },
-										 Vertex{ {	0.5f, -0.5f, 0.5f, 1.0f },	{ 0.0f, 1.0f, 0.0f, 1.0f } },
-										 Vertex{ { -0.5f, -0.5f, 0.5f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
-										 Vertex{ {	0.5f,  0.5f, 0.5f, 1.0f }, 	{ 0.0f, 1.0f, 1.0f, 1.0f } },
+		                 Vertex{ {	-0.5f, 0.5f, -2.5f, 1.0f },	{ 1.0f, 0.0f, 0.0f, 1.0f } },
+										 Vertex{ {	0.5f, -0.5f, -1.5f, 1.0f },	{ 0.0f, 1.0f, 0.0f, 1.0f } },
+										 Vertex{ { -0.5f, -0.5f, -1.5f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
+										 Vertex{ {	0.5f,  0.5f, -2.5f, 1.0f }, { 0.0f, 1.0f, 1.0f, 1.0f } },
 		
-										 Vertex{ { -0.75f, 0.75f,	0.7f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
-										 Vertex{ {	0.0f,	 0.0f,	0.7f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
-										 Vertex{ { -0.75f, 0.0f,	0.7f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
-										 Vertex{ {	0.0f,  0.75f,	0.7f, 1.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } });
+										 Vertex{ { -3.95f, 0.75f,	-4.7f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
+										 Vertex{ {	0.0f,	 0.0f,	-4.7f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
+										 Vertex{ { -3.95f, 0.0f,	-4.7f, 1.0f },	{ 0.0f, 0.0f, 1.0f, 1.0f } },
+										 Vertex{ {	0.0f,  0.75f,	-4.7f, 1.0f }, 	{ 0.0f, 0.0f, 1.0f, 1.0f } });
 		
 		Array_View<u16>indices_data{};
 		indices_data.init(&app_state->arena_assets, 0, 1, 2,  0, 3, 1);
@@ -72,8 +72,14 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 																.z = sin(cam_yaw) * cos(cam_pitch)
 		});
 	
-		lib::Mat4 mat_model = lib::create_translate({-0.33f, 0.0f, 0.0f});
-		mat_model = mat_model * lib::create_rotation_z((f32)window->time_ms / 1000.0f);
+		lib::Mat4 mat_view = lib::create_look_at( { 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+		lib::Mat4 mat_trans = lib::create_translate({-0.33f, 0.0f, 0.0f});
+		lib::Mat4 mat_rotation = lib::create_rotation_z((f32)window->time_ms / 1000.0f);
+		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(50.0f), 
+		                                                   (f32)window->width/window->height, 
+		                                                   0.1f, 
+		                                                   100.0f);
+		lib::Mat4 mat_model = mat_projection * mat_view  * mat_rotation;
 		
 		f32 pulse = (f32)(std::sin((f32)window->time_ms / 300) + 1) / 2;
 		

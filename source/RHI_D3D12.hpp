@@ -21,6 +21,8 @@
  * 12) upload_static_data has to be changed to be a data thats const per "level" and needs upload 
  * 			to default heap. In data sent from app to rhi then we would have 2 streams of data depending
  * 			on frequency -> or streams of render passses later
+ * 13) Might reduce quering in sync_with_fence for GetCompletedValue by quering in if only and compare
+ * 			with fence_counter instead
  * */
 
 #include "d3dx12.h"
@@ -40,8 +42,6 @@ inline void THR(HRESULT) {}
 #define RELEASE_SAFE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 inline constexpr u8 g_count_backbuffers = 3;
-inline constexpr u32 g_alloc_alignment = 256;
-inline constexpr u64 g_upload_heap_max_size = MiB(20);
 
 struct Data_To_RHI;
 

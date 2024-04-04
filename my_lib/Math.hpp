@@ -17,9 +17,24 @@
 //TODO: Test whether it is faster for Vec4 to do single dots for projection etc. or is it better to do two dots "at once" with another two,
 //TODO:	wasted (discarded), similar situation for cross product
 
+#undef max
+#undef min
+#undef near
+#undef far
+
 namespace lib
 {
 	template <typename T> concept be_number = std::integral<T> || std::floating_point<T>;
+	
+	inline constexpr f32 deg_to_rad(const f32 degrees)
+	{
+		return degrees * PI32 / 180.0f;
+	}
+	
+	inline constexpr f32 rad_to_deg(const f32 radians)
+	{
+		return radians * 180.0f / PI32;
+	}
 
 	inline f32 sqrt(const f32 f)
 	{
@@ -853,7 +868,7 @@ namespace lib
     out.e[2][0] = 0.0f;
     out.e[2][1] = -sin_theta;
     out.e[2][2] = cos_theta;
-
+		
     return out;
 	}
 	
@@ -875,7 +890,7 @@ namespace lib
     out.e[2][0] = sin_theta;
     out.e[2][1] = 0.0f;
     out.e[2][2] = cos_theta;
-
+		
     return out;
 	}
 	
@@ -897,6 +912,54 @@ namespace lib
     out.e[2][0] = 0.0f;
     out.e[2][1] = 0.0f;
     out.e[2][2] = 1.0f;
+		
+    return out;
+	}
+	
+	inline Mat4 create_look_at(Vec3 eye, Vec3 target, Vec3 up)
+	{
+		Mat4 out{};
+		
+		Vec3 forward = normalize(eye - target);
+		Vec3 right = normalize(cross(up, forward));
+		Vec3 upward = cross(forward, right);
+		
+		out.e[0][0] = right.x;
+    out.e[0][1] = upward.x;
+    out.e[0][2] = forward.x;
+    out.e[0][3] = 0.0f;
+
+    out.e[1][0] = right.y;
+    out.e[1][1] = upward.y;
+    out.e[1][2] = forward.y;
+    out.e[1][3] = 0.0f;
+
+    out.e[2][0] = right.z;
+    out.e[2][1] = upward.z;
+    out.e[2][2] = forward.z;
+    out.e[2][3] = 0.0f;
+
+    out.e[3][0] = -dot(right, eye);
+    out.e[3][1] = -dot(upward, eye);
+    out.e[3][2] = -dot(forward, eye);
+    out.e[3][3] = 1.0f;
+		
+		return out;
+	}
+	
+	inline Mat4 create_perspective(f32 fov, f32 aspect, f32 near, f32 far)
+	{
+		Mat4 out{};
+		
+		f32 y_scale = 1.0f / tan(fov / 2.0f);
+		f32 x_scale = y_scale / aspect;
+		
+		out.e[0][0] = x_scale;
+    out.e[1][1] = y_scale;
+    out.e[2][3] = -1.0f;
+
+    out.e[2][2] = (far) / (near - far);
+    out.e[3][2] = (near * far) / (near - far);
 
     return out;
 	}
@@ -906,13 +969,8 @@ namespace lib
 
 	}
 
-	struct Trans4 : Mat4
-	{
-		// No additional data
-	};
-
 	//? Linear combination with last add+mul skipped
-	inline __m128 transform_linear_combination(const Trans4 a, __m128 b)
+	inline __m128 trans_linear_combination(const Mat4 a, __m128 b)
 	{
 		__m128 out{};
 		out = _mm_mul_ps( a.columns[0], _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0) ) );
@@ -923,17 +981,17 @@ namespace lib
 	}
 
 	//? Multiplication when Vec3 is 3D vector (w=0), we can skip last mul+add completely
-	inline Vec3 mul_vec(const Trans4 a, const Vec3 p)
+	inline Vec3 mul_trans_vec(const Mat4 a, const Vec3 p)
 	{
 		Vec4 out{};
 		__m128 converted = _mm_set_ps( 0.0f, p.z, p.y, p.x );
-		out.simd = transform_linear_combination(a, converted);
+		out.simd = trans_linear_combination(a, converted);
 
 		return { out.x, out.y, out.z };
 	}
 
 	//? Multiplication when Vec3 is a homogenous point (w=1), we can skip last multiplication
-	inline Vec3 mul_point(const Trans4 a, const Vec3 p)
+	inline Vec3 mul_trans_point(const Mat4 a, const Vec3 p)
 	{
 		Vec4 out{};
 		__m128 con = _mm_set_ps( 1.0f, p.z, p.y, p.x );
@@ -946,37 +1004,25 @@ namespace lib
 	}
 
 	//? "cutted" linear combination for first 3 columns cause bottom element is 0
-	inline Trans4 operator*(const Trans4 a, const Trans4 b)
+	inline Mat4 mul_trans(const Mat4 a, const Mat4 b)
 	{
-		Trans4 out{};
-		out.columns[0] = transform_linear_combination(a, b.columns[0]);
-		out.columns[1] = transform_linear_combination(a, b.columns[1]);
-		out.columns[2] = transform_linear_combination(a, b.columns[2]);
+		Mat4 out{};
+		out.columns[0] = trans_linear_combination(a, b.columns[0]);
+		out.columns[1] = trans_linear_combination(a, b.columns[1]);
+		out.columns[2] = trans_linear_combination(a, b.columns[2]);
 		out.columns[3] = linear_combination(a, b.columns[3]);
 
 		return out;
 	}
 
-	inline Vec3 get_scale(const Trans4 a)
+	inline Vec3 get_scale(const Mat4 a)
 	{   
 		return { a.e[0][0], a.e[1][1], a.e[2][2] };
 	}
 
-	inline Vec3 get_translation(const Trans4 a)
+	inline Vec3 get_translation(const Mat4 a)
 	{
 		return { a.e[3][0],a.e[3][1], a.e[3][2] };
-	}
-
-	[[nodiscard]]
-	inline Trans4 create_diagonal_transform(const f32 val = 1.0f)
-	{
-		Trans4 out{};
-		out.e[0][0] = val;
-		out.e[1][1] = val;
-		out.e[2][2] = val;
-		out.e[3][3] = 1.0f;
-
-		return out;
 	}
 	
 	//? Based on https://lxjk.github.io/2017/09/03/Fast-4x4-Matrix-Inverse-with-SSE-SIMD-Explained.html
@@ -984,9 +1030,9 @@ namespace lib
 	//? data already prepared for SIMD dots for length calculation. 
 	//! Removed divide by 0 check of original implementation, YOLO
 	//! This may not work for transforms with shear, skew TEST!
-	inline Trans4 inverse(const Trans4 a)
+	inline Mat4 inverse_trans(const Mat4 a)
 	{
-		Trans4 out{};
+		Mat4 out{};
 
 		// transpose 3x3
 		__m128 t0 = _mm_movelh_ps(a.columns[0], a.columns[1]);
