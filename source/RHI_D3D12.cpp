@@ -348,6 +348,8 @@ namespace DX
 			pso_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT; // Sync this!
 			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // Sync this!
 			pso_desc.SampleDesc.Count = 1;
+			// For RH coordinate system, CCW winding order is needed
+			pso_desc.RasterizerState.FrontCounterClockwise = TRUE;
 			
 			THR(device->CreateGraphicsPipelineState(&pso_desc, IID_PPV_ARGS(&out.pso)));
 		}
@@ -519,8 +521,8 @@ namespace DX
 					};
 				
 					ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
-					ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 0, 0);
-					ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
+					ctx->cmd_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
+					//ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
 				}
 			}
 			
