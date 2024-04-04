@@ -84,7 +84,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		                                                   (f32)window->width/window->height, 
 		                                                   0.1f, 
 		                                                   100.0f);
-		lib::Mat4 mat_model = mat_projection * mat_view * mat_rotation ;
+		lib::Mat4 mat_model = mat_trans * mat_rotation;
 		
 		f32 pulse = (f32)(std::sin((f32)window->time_ms / 300) + 1) / 2;
 		
@@ -97,6 +97,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 			data_to_rhi->cb_frame.light_col = { pulse, pulse, pulse, 1.0f };
 			// Draw constants
 			data_to_rhi->cb_draw.obj_to_world = mat_model;
+			data_to_rhi->cb_draw.world_to_clip = mat_projection * mat_view;
 		}
 	}
 	

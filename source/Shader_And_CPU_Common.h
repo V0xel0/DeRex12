@@ -15,7 +15,7 @@ struct Constant_Data_Frame
 struct Constant_Data_Draw
 {
 	Mat4 obj_to_world;
-	Mat4 obj_to_clip;
+	Mat4 world_to_clip;
 	Vec3 albedo;
 	f32 pad;
 };

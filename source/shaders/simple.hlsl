@@ -11,7 +11,7 @@ ConstantBuffer<Constant_Data_Frame>	cb_per_frame 	: register(b1);
 
 struct PSInput
 {
-	float4 position : SV_POSITION;
+	float4 pos_ndc : SV_POSITION;
 	float4 color : COLOR;
 };
 
@@ -20,7 +20,10 @@ PSInput VSMain(in float4 position : POSITION, in float4 color : COLOR)
 {
 	PSInput result;
  
-	result.position = mul(cb_per_draw.obj_to_world, position);
+	const float4x4 obj_to_world = cb_per_draw.obj_to_world;
+	const float4x4 obj_to_clip = mul(cb_per_draw.world_to_clip, obj_to_world);
+	
+	result.pos_ndc = mul(obj_to_clip, position);
 	result.color = color;
  
 	return result;
