@@ -5,17 +5,14 @@
 
 #include "Utils.hpp"
 
-//TODO: Mat4 basic operations: Basics, Det, Inverse (transform, basic, normal), Adjugate
-//TODO: Mat4 CG operations: Normal M, Inverse normal M, 
 //TODO: Lerp, ceil, floor, round, trunc with vectors
 //TODO: quaternions (angle and other), quaternion to rotation mat4 (check insomniac paper), and mat4 to quaternion
 //TODO: Euler angles
-//TODO: keep adding SIMD where possible and makes sense
 //TODO: Exponent for integers and floats
 //TODO: ? To concept or not to concept ?
 //TODO: Consider inlining instead of calling dots, crosses etc.
 //TODO: Test whether it is faster for Vec4 to do single dots for projection etc. or is it better to do two dots "at once" with another two,
-//TODO:	wasted (discarded), similar situation for cross product
+//TODO:		wasted (discarded), similar situation for cross product
 
 #undef max
 #undef min
@@ -395,9 +392,7 @@ namespace lib
 
 	inline f32 dot(const Vec3 a, const Vec3 b) 
 	{
-		return (a.x * b.x)
-			+ (a.y * b.y)
-			+ (a.z * b.z);
+		return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
 	}
 
 	inline f32 length_vec(const Vec3 a) 
@@ -431,8 +426,8 @@ namespace lib
 	inline Vec3 cross(const Vec3 a, const Vec3 b) 
 	{
 		return Vec3{ 	(a.y * b.z) - (a.z * b.y),
-						(a.z * b.x) - (a.x * b.z),
-						(a.x * b.y) - (a.y * b.x) };
+									(a.z * b.x) - (a.x * b.z),
+									(a.x * b.y) - (a.y * b.x) };
 	}
 
 	inline Vec3 reflect(const Vec3 a, const Vec3 b)
@@ -822,8 +817,9 @@ namespace lib
 
 	inline Mat4 transpose(Mat4 a)
 	{
-		_MM_TRANSPOSE4_PS(a.columns[0], a.columns[1], a.columns[2], a.columns[3]);
-		return a;
+		Mat4 out = a;
+		_MM_TRANSPOSE4_PS(out.columns[0], out.columns[1], out.columns[2], out.columns[3]);
+		return out;
 	}
 
 	[[nodiscard]]
@@ -981,9 +977,9 @@ namespace lib
     f32 cos_yaw 	= cos(yaw);
     f32 sin_yaw 	= sin(yaw);
 		
-		Vec3 forward	= {cos_yaw, 0.0f, -sin_yaw};
-		Vec3 right		= {sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch};
-		Vec3 upward		= {sin_yaw * cos_pitch, -sin_pitch, cos_pitch * cos_yaw};
+		Vec3 forward {cos_yaw, 0.0f, -sin_yaw};
+		Vec3 right	 {sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch};
+		Vec3 upward	 {sin_yaw * cos_pitch, -sin_pitch, cos_pitch * cos_yaw};
 		
 		out.e[0][0] = right.x;
     out.e[0][1] = upward.x;
@@ -1024,10 +1020,42 @@ namespace lib
 
     return out;
 	}
-
+	
+	inline f32 det(const Mat4 a)
+	{
+		f32 out = 0.0f;
+		
+		Vec3 c01 = cross(a.vecs[0].xyz, a.vecs[1].xyz);
+    Vec3 c23 = cross(a.vecs[2].xyz, a.vecs[3].xyz);
+    Vec3 u = a.vecs[0].xyz * a.vecs[1].w - a.vecs[1].xyz * a.vecs[0].w;
+    Vec3 v = a.vecs[2].xyz * a.vecs[3].w - a.vecs[3].xyz * a.vecs[2].w;
+		
+		out = dot(c01, v) + dot(c23, u);
+		return out;
+	}
+	
+	// Math formula from Eric Lengyel book "Foundations of Game Engine Development"
 	inline Mat4 inverse(const Mat4 a)
 	{
+		Mat4 out{};
+		
+		Vec3 c01 = cross(a.vecs[0].xyz, a.vecs[1].xyz);
+    Vec3 c23 = cross(a.vecs[2].xyz, a.vecs[3].xyz);
+    Vec3 u = a.vecs[0].xyz * a.vecs[1].w - a.vecs[1].xyz * a.vecs[0].w;
+    Vec3 v = a.vecs[2].xyz * a.vecs[3].w - a.vecs[3].xyz * a.vecs[2].w;
 
+    float inv_det = 1.0f / (dot(c01, v) + dot(c23, u));
+    c01 = c01 * inv_det;
+    c23 = c23 * inv_det;
+    u		= u 	* inv_det;
+    v		= v 	* inv_det;
+
+		out.vecs[0] = Vec4{ cross(a.vecs[1].xyz, v) + c23 * a.vecs[1].w, -dot(a.vecs[1].xyz, c23) };
+		out.vecs[1] = Vec4{ cross(v, a.vecs[0].xyz) - c23 * a.vecs[0].w,  dot(a.vecs[0].xyz, c23) };
+		out.vecs[2] = Vec4{ cross(a.vecs[3].xyz, u) + c01 * a.vecs[3].w, -dot(a.vecs[3].xyz, c01) };
+		out.vecs[3] = Vec4{ cross(u, a.vecs[2].xyz) - c01 * a.vecs[2].w,  dot(a.vecs[2].xyz, c01) };
+
+    return transpose(out); 
 	}
 
 	//? Linear combination with last add+mul skipped
@@ -1035,11 +1063,25 @@ namespace lib
 	{
 		__m128 out{};
 		
-		out = _mm_mul_ps( a.columns[0], _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0) ) );
-		out = _mm_add_ps( out, _mm_mul_ps(a.columns[1], _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1) ) ) );
-		out = _mm_add_ps( out, _mm_mul_ps(a.columns[2], _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2) ) ) );
+		out = _mm_mul_ps(a.columns[0], _mm_shuffle_ps(b, b, _MM_SHUFFLE(0, 0, 0, 0)));
+		out = _mm_add_ps(out, _mm_mul_ps(a.columns[1], _mm_shuffle_ps(b, b, _MM_SHUFFLE(1, 1, 1, 1))));
+		out = _mm_add_ps(out, _mm_mul_ps(a.columns[2], _mm_shuffle_ps(b, b, _MM_SHUFFLE(2, 2, 2, 2))));
 
 		return out;
+	}
+	
+	// used for multiplication with normal vector: https://github.com/graphitemaster/normals_revisited
+	// so translation column doesnt matter this is essentialy 3x3 adjugate
+	inline Mat4 adjugate_trans(const Mat4 a)
+	{
+		Mat4 out{};
+		
+		out.vecs[0] = Vec4 { cross(a.vecs[1].xyz, a.vecs[2].xyz), 0.0f };
+		out.vecs[1] = Vec4 { cross(a.vecs[2].xyz, a.vecs[0].xyz), 0.0f };
+		out.vecs[2] = Vec4 { cross(a.vecs[0].xyz, a.vecs[1].xyz), 0.0f };
+		out.vecs[3][3] = 1.0f;
+		
+		return transpose(out);
 	}
 
 	//? Multiplication when Vec3 is 3D vector (w=0), we can skip last mul+add completely
