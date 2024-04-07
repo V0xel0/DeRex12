@@ -34,8 +34,8 @@ struct Game_Controller
 		Game_Key_State buttons[12];
 		struct
 		{
-			Game_Key_State moveUp;
-			Game_Key_State moveDown;
+			Game_Key_State moveForward;
+			Game_Key_State moveBackward;
 			Game_Key_State moveLeft;
 			Game_Key_State moveRight;
 

@@ -24,6 +24,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 	auto* device 			= &app_state->rhi.device;
 	auto* ctx_direct 	= &app_state->rhi.ctx_direct;
 	auto* data_to_rhi = &app_state->data_for_rhi;
+	auto* camera 			= &app_state->camera;
 	
 	if (!memory->is_initalized)
 	{
@@ -60,10 +61,30 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		data_to_rhi->indices	=		upload_static_data(device, ctx_direct, indices_data);
 		execute_and_wait(ctx_direct);
 		
-		app_state->camera = { .pos = { 2.0f, 0.0f, 2.0f }, .yaw = PI32 + PI32 / 4.0f };
+		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f };
 		
 		arena_reset(&app_state->arena_assets);
 		memory->is_initalized = true;
+	}
+	
+	// Input check
+	{
+		for (auto& controller : inputs->controllers)
+		{
+			if(controller.isConnected)
+			{
+				f32 move_speed = 0.15f;
+				
+				if(controller.moveForward.wasDown)
+				{
+					camera->pos = camera->pos + camera->forward * move_speed;
+				}
+				if(controller.moveBackward.wasDown)
+				{
+					camera->pos = camera->pos - camera->forward * move_speed;
+				}
+			}
+		}
 	}
 	
 	// Modyfing/Creating data for RHI
@@ -71,13 +92,12 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		auto cam_yaw = app_state->camera.yaw;
 		auto cam_pitch = app_state->camera.pitch;
 		// Could also multiply pre-setted forward vec with rotation matrix around X(from pitch) and Y(from yaw)
-		app_state->camera.forward = lib::normalize( lib::Vec3{
+		camera->forward = lib::normalize( lib::Vec3{
 		                            .x = cos(cam_yaw) * cos(cam_pitch),
 																.y = sin(cam_pitch),
-																.z = sin(cam_yaw) * cos(cam_pitch)
-		});
+																.z = sin(cam_yaw) * cos(cam_pitch) });
 	
-		lib::Mat4 mat_view = lib::create_look_at( { 3.0f, 0.0f, 8.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+		lib::Mat4 mat_view = lib::create_look_at( camera->pos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
 		lib::Mat4 mat_trans = lib::create_translate({-0.33f, 0.0f, 0.0f});
 		lib::Mat4 mat_rotation = lib::create_rotation_z((f32)window->time_ms / 1000.0f);
 		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(50.0f), 

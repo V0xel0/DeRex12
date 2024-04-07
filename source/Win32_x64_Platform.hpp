@@ -220,11 +220,11 @@ namespace Win32
 				{
 					if (vkCode == 'W')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveUp, isDown);
+						Win32::process_keyboard_mouse_event(&keyboardMouse->moveForward, isDown);
 					}
 					else if (vkCode == 'S')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveDown, isDown);
+						Win32::process_keyboard_mouse_event(&keyboardMouse->moveBackward, isDown);
 					}
 					else if (vkCode == 'A')
 					{

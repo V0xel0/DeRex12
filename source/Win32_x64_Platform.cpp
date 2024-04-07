@@ -90,7 +90,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		// Window size change check
 		auto&& [new_width, new_height] = Win32::get_window_client_dims(win_handle);
 		
-		// Update renderer
+		// Update application
 		game_window.width = new_width;
 		game_window.height = new_height;
 		game_window.is_closed = Win32::g_is_running ? false : true;
@@ -98,6 +98,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		update_app(&game_memory, &game_window, new_inputs);
 		
 		f64 frame_time_ms = Win32::get_elapsed_ms_here(clock, tick_start);
+		swap(old_inputs, new_inputs);
 		
 		if (counter % 100 == 0)
 		{

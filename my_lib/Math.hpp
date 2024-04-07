@@ -968,7 +968,7 @@ namespace lib
 		return out;
 	}
 	
-	inline Mat4 create_fps_view(Vec3 eye, f32 pitch, f32 yaw)
+	inline Mat4 create_fpp_view(Vec3 eye, f32 pitch, f32 yaw)
 	{
 		Mat4 out{};
 		
