@@ -16,6 +16,8 @@
 
 #undef max
 #undef min
+#undef Max
+#undef Min
 #undef near
 #undef far
 
@@ -33,6 +35,24 @@ namespace lib
 	inline constexpr f32 rad_to_deg(const f32 radians)
 	{
 		return radians * 180.0f / PI32;
+	}
+	
+	// Basically taken from XMScalarModAngle in DirectXMath, its modulo between -PI to PI
+	inline f32 mod_pi(f32 angle)
+	{
+		constexpr f32 pi32_2 = 2.0f * PI32;
+		angle = angle + PI32;
+    // Perform the modulo, unsigned
+    float f_t = fabsf(angle);
+    f_t = f_t - (pi32_2 * (f32)((s32)(f_t / pi32_2)));
+    // Restore the number to the range of -PI to PI-epsilon
+    f_t = f_t - PI32;
+    // If the modulo'd value was negative, restore negation
+    if (angle < 0.0f)
+    {
+			f_t = -f_t;
+    }
+    return f_t;
 	}
 
 	inline f32 sqrt(const f32 f)
@@ -74,32 +94,32 @@ namespace lib
 	//? Naive solutions produce better assembly in optimized than SIMD version for clamp, min, max, abs, lerp
 
 	template<be_number T>
-	constexpr T clamp(T val, T min, T max) 
+	inline T clamp(T val, T min, T max) 
 	{
-		constexpr T t = val < min ? min : val;
+		const T t = val < min ? min : val;
 		return t > max ? max : t;
 	}
 
 	template<be_number T>
-	constexpr T min(T a, T b) 
+	inline T min(T a, T b) 
 	{
 		return a < b ? a : b;
 	}
 
 	template<be_number T>
-	constexpr T max(T a, T b) 
+	inline T max(T a, T b) 
 	{
 		return a > b ? a : b;
 	}
 
 	template <be_number T>
-	constexpr T mod(T a, T b)
+	inline T mod(T a, T b)
 	{
 		return (a % b + b) % b;
 	}
 
 	template<be_number T>
-	constexpr T abs(T val)
+	inline T abs(T val)
 	{
 		return val > 0 ? val : -val;
 	}
@@ -107,19 +127,19 @@ namespace lib
 	//! Be aware that below implementations are not clamped, and not checked for division by 0!
 	//? MSVC fnma+fma combo, Clang sub+fma - both are good
 	template<be_number T>
-	constexpr T lerp(T a, T b, T val)
+	inline T lerp(T a, T b, T val)
 	{
 		return a * (1 - val) + ( b * val);
 	}
 
 	template<be_number T>
-	constexpr T inv_lerp(T a, T b, T val)
+	inline T inv_lerp(T a, T b, T val)
 	{
 		return (val - a) / (b - a);
 	}
 
 	template<be_number T>
-	constexpr T remap_range(T in_min, T in_max, T out_min, T out_max, T val)
+	inline T remap_range(T in_min, T in_max, T out_min, T out_max, T val)
 	{
 		constexpr T temp = inv_lerp(in_min, in_max, val);
 		return lerp(out_min, out_max, temp);

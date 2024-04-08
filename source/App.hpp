@@ -16,6 +16,7 @@ struct Camera
 	lib::Vec3 forward;
 	f32 pitch;
 	f32 yaw;
+	f32 fov;
 };
 
 struct App_State

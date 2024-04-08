@@ -19,9 +19,9 @@ struct Game_Mouse_Data
 {
 	s32 x;
 	s32 y;
-	s32 deltaX;
-	s32 deltaY;
-	s32 deltaWheel;
+	s32 delta_x;
+	s32 delta_y;
+	s32 delta_wheel;
 };
 
 struct Game_Controller

@@ -3,6 +3,11 @@
 
 // version: 0.0.1 19.02.2024
 
+#undef max
+#undef Max
+#undef min
+#undef Min
+
 using f32 = float;
 using f64 = double;
 

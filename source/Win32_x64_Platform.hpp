@@ -165,11 +165,11 @@ namespace Win32
 				}
 				if (raw->header.dwType == RIM_TYPEMOUSE)
 				{
-					keyboard_mouse->mouse.deltaX = raw->data.mouse.lLastX;
-					keyboard_mouse->mouse.deltaY = raw->data.mouse.lLastY;
+					keyboard_mouse->mouse.delta_x = raw->data.mouse.lLastX;
+					keyboard_mouse->mouse.delta_y = raw->data.mouse.lLastY;
 					if (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
 					{
-						keyboard_mouse->mouse.deltaWheel = (*(s16 *)&raw->data.mouse.usButtonData);
+						keyboard_mouse->mouse.delta_wheel = (*(s16 *)&raw->data.mouse.usButtonData);
 					}
 					// Mouse buttons
 					if (raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN)

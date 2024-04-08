@@ -17,6 +17,11 @@ using namespace DX;
 #include "Render_Data.hpp"
 #include "App.hpp"
 
+#undef max
+#undef Max
+#undef min
+#undef Min
+
 inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.15f)
 {
 	lib::Vec3 out = cam_pos;
@@ -68,7 +73,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		data_to_rhi->indices	=		upload_static_data(device, ctx_direct, indices_data);
 		execute_and_wait(ctx_direct);
 		
-		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f };
+		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };
 		
 		arena_reset(&app_state->arena_assets);
 		memory->is_initalized = true;
@@ -76,16 +81,12 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 	
 	// Camera
 	{
-		auto cam_yaw = app_state->camera.yaw;
-		auto cam_pitch = app_state->camera.pitch;
-		
-		// Could also multiply pre-setted forward vec with rotation matrix around X(from pitch) and Y(from yaw)
 		camera->forward = lib::normalize( lib::Vec3{
-		                  .x = sin(cam_yaw) * cos(cam_pitch),
-											.y = sin(cam_pitch),
-											.z = -cos(cam_pitch) * cos(cam_pitch) });
+		                  .x = cos(camera->yaw) * cos(camera->pitch),
+											.y = sin(camera->pitch),
+											.z = sin(camera->yaw) * cos(camera->pitch) });
 	}
-	
+
 	// Input check
 	{
 		for (auto& controller : inputs->controllers)
@@ -96,7 +97,12 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 				{
 					if(controller.rotate_start.wasDown)
 					{
-						OutputDebugStringA("alt+RMB");
+						constexpr f32 sens = 0.025f;
+            camera->yaw		= camera->yaw + sens * controller.mouse.delta_x;
+						camera->pitch	= camera->pitch + sens * -controller.mouse.delta_y;
+						
+						camera->pitch = lib::clamp(camera->pitch, -0.49f * PI32, 0.49f * PI32);
+						camera->yaw		= lib::mod_pi(camera->yaw);
 					}
 				}
 				
@@ -128,7 +134,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		lib::Mat4 mat_view = lib::create_look_at( camera->pos, camera->pos + camera->forward, { 0.0f, 1.0f, 0.0f });
 		lib::Mat4 mat_trans = lib::create_translate({-0.33f, 0.0f, 0.0f});
 		lib::Mat4 mat_rotation = lib::create_rotation_z((f32)window->time_ms / 1000.0f);
-		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(50.0f), 
+		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(camera->fov), 
 		                                                   (f32)window->width/window->height, 
 		                                                   0.1f, 
 		                                                   100.0f);

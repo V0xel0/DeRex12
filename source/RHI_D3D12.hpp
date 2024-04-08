@@ -24,7 +24,6 @@
  * 13) Might reduce quering in sync_with_fence for GetCompletedValue by quering in if only and compare
  * 			with fence_counter instead
  * */
-
 #include "d3dx12.h"
 #ifdef _DEBUG
 #include <dxgidebug.h>
