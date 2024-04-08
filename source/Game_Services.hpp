@@ -34,17 +34,18 @@ struct Game_Controller
 		Game_Key_State buttons[12];
 		struct
 		{
-			Game_Key_State moveForward;
-			Game_Key_State moveBackward;
-			Game_Key_State moveLeft;
-			Game_Key_State moveRight;
+			Game_Key_State move_forward;
+			Game_Key_State move_backward;
+			Game_Key_State move_left;
+			Game_Key_State move_right;
 
-			Game_Key_State actionFire;
+			Game_Key_State main_click;
 			Game_Key_State action1;
 			Game_Key_State action2;
 			Game_Key_State action3;
 			Game_Key_State action4;
-			Game_Key_State action5;
+			
+			Game_Key_State rotate_start;
 
 			Game_Key_State back;
 			Game_Key_State start;

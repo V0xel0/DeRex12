@@ -17,6 +17,13 @@ using namespace DX;
 #include "Render_Data.hpp"
 #include "App.hpp"
 
+inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.15f)
+{
+	lib::Vec3 out = cam_pos;
+	
+	return out + dir * speed;
+}
+
 extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
 {
 	App_State* app_state = (App_State*)memory->permanent_storage;
@@ -67,21 +74,50 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		memory->is_initalized = true;
 	}
 	
+	// Camera
+	{
+		auto cam_yaw = app_state->camera.yaw;
+		auto cam_pitch = app_state->camera.pitch;
+		
+		// Could also multiply pre-setted forward vec with rotation matrix around X(from pitch) and Y(from yaw)
+		camera->forward = lib::normalize( lib::Vec3{
+		                  .x = sin(cam_yaw) * cos(cam_pitch),
+											.y = sin(cam_pitch),
+											.z = -cos(cam_pitch) * cos(cam_pitch) });
+	}
+	
 	// Input check
 	{
 		for (auto& controller : inputs->controllers)
 		{
 			if(controller.isConnected)
 			{
-				f32 move_speed = 0.15f;
-				
-				if(controller.moveForward.wasDown)
+				// Mouse
 				{
-					camera->pos = camera->pos + camera->forward * move_speed;
+					if(controller.rotate_start.wasDown)
+					{
+						OutputDebugStringA("alt+RMB");
+					}
 				}
-				if(controller.moveBackward.wasDown)
+				
+				lib::Vec3 cam_rightward = lib::normalize(lib::cross(camera->forward, { 0.0f, 1.0f, 0.0f }));
+				
+				// Keyboard keys
+				if(controller.move_forward.wasDown)
 				{
-					camera->pos = camera->pos - camera->forward * move_speed;
+					camera->pos = move_camera(camera->pos, camera->forward);
+				}
+				if(controller.move_backward.wasDown)
+				{
+					camera->pos = move_camera(camera->pos, -camera->forward);
+				}
+				if(controller.move_right.wasDown)
+				{
+					camera->pos = move_camera(camera->pos, cam_rightward);
+				}
+				if(controller.move_left.wasDown)
+				{
+					camera->pos = move_camera(camera->pos, -cam_rightward);
 				}
 			}
 		}
@@ -89,15 +125,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 	
 	// Modyfing/Creating data for RHI
 	{
-		auto cam_yaw = app_state->camera.yaw;
-		auto cam_pitch = app_state->camera.pitch;
-		// Could also multiply pre-setted forward vec with rotation matrix around X(from pitch) and Y(from yaw)
-		camera->forward = lib::normalize( lib::Vec3{
-		                            .x = cos(cam_yaw) * cos(cam_pitch),
-																.y = sin(cam_pitch),
-																.z = sin(cam_yaw) * cos(cam_pitch) });
-	
-		lib::Mat4 mat_view = lib::create_look_at( camera->pos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+		lib::Mat4 mat_view = lib::create_look_at( camera->pos, camera->pos + camera->forward, { 0.0f, 1.0f, 0.0f });
 		lib::Mat4 mat_trans = lib::create_translate({-0.33f, 0.0f, 0.0f});
 		lib::Mat4 mat_rotation = lib::create_rotation_z((f32)window->time_ms / 1000.0f);
 		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(50.0f), 

@@ -45,7 +45,6 @@ namespace Win32
 
 		switch (message)
 		{
-
 			case WM_MENUCHAR:
 			{
 				output = MAKELRESULT(0, MNC_CLOSE);
@@ -143,33 +142,43 @@ namespace Win32
 		}
 	}
 
-	internal void process_keyboard_mouse_msg(MSG *msg, Game_Controller *keyboardMouse)
+	internal void process_keyboard_mouse_msg(MSG *msg, Game_Controller *keyboard_mouse)
 	{
-		LPARAM lParam = msg->lParam;
-		WPARAM wParam = msg->wParam;
+		LPARAM l_param = msg->lParam;
+		WPARAM w_param = msg->wParam;
+		
+		u32 vk_code = (u32)w_param;
 
 		switch (msg->message)
 		{
-			// Used for obtaining relative mouse movement and wheel without acceleration
+			// Used for obtaining relative mouse movement and wheel without acceleration and buttons state
 			case WM_INPUT:
 			{
 				u32 size = sizeof(RAWINPUT);
 				RAWINPUT raw[sizeof(RAWINPUT)];
-				u32 copied = GetRawInputData((HRAWINPUT)lParam, RID_INPUT, raw, &size, sizeof(RAWINPUTHEADER));
+				u32 copied = GetRawInputData((HRAWINPUT)l_param, RID_INPUT, raw, &size, sizeof(RAWINPUTHEADER));
 
 				if (copied != size)
 				{
-					//TODO: Fail handling from GetRawInputData()
 					MessageBoxA(NULL, "Incorrect raw input data size!", "error", 0);
 					break;
 				}
 				if (raw->header.dwType == RIM_TYPEMOUSE)
 				{
-					keyboardMouse->mouse.deltaX = raw->data.mouse.lLastX;
-					keyboardMouse->mouse.deltaY = raw->data.mouse.lLastY;
+					keyboard_mouse->mouse.deltaX = raw->data.mouse.lLastX;
+					keyboard_mouse->mouse.deltaY = raw->data.mouse.lLastY;
 					if (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
 					{
-						keyboardMouse->mouse.deltaWheel = (*(s16 *)&raw->data.mouse.usButtonData);
+						keyboard_mouse->mouse.deltaWheel = (*(s16 *)&raw->data.mouse.usButtonData);
+					}
+					// Mouse buttons
+					if (raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN)
+					{
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->rotate_start, true);
+					}
+					if (raw->data.mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP)
+					{
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->rotate_start, false);
 					}
 				}
 			}
@@ -177,32 +186,8 @@ namespace Win32
 
 			case WM_MOUSEMOVE:
 			{
-				keyboardMouse->mouse.x = (s32)(GET_X_LPARAM(lParam) );
-				keyboardMouse->mouse.y = (s32)(GET_Y_LPARAM(lParam) );
-			}
-			break;
-
-			// LMB RMB MMB down messages
-			case WM_LBUTTONDOWN:
-			case WM_MBUTTONDOWN:
-			case WM_RBUTTONDOWN:
-			{
-			}
-			break;
-
-			// LMB RMB MMB up messages
-			case WM_LBUTTONUP:
-			case WM_MBUTTONUP:
-			case WM_RBUTTONUP:
-			{
-			}
-			break;
-
-			// LMB RMB MMB double click messages
-			case WM_LBUTTONDBLCLK:
-			case WM_MBUTTONDBLCLK:
-			case WM_RBUTTONDBLCLK:
-			{
+				keyboard_mouse->mouse.x = (s32)(GET_X_LPARAM(l_param) );
+				keyboard_mouse->mouse.y = (s32)(GET_Y_LPARAM(l_param) );
 			}
 			break;
 
@@ -212,75 +197,74 @@ namespace Win32
 			case WM_KEYDOWN:
 			case WM_KEYUP:
 			{
-				u32 vkCode = (u32)wParam;
-				b32 wasDown = TestBit(lParam, 30) != 0;
-				b32 isDown = TestBit(lParam, 31) == 0;
-				//TODO: Consider binding from file?
-				if (wasDown != isDown)
+				b32 alt_was_down = TestBit(l_param, 29);
+				b32 was_down = TestBit(l_param, 30) != 0;
+				b32 is_down = TestBit(l_param, 31) == 0;
+				
+				if (was_down != is_down)
 				{
-					if (vkCode == 'W')
+					if (vk_code == 'W')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveForward, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->move_forward, is_down);
 					}
-					else if (vkCode == 'S')
+					else if (vk_code == 'S')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveBackward, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->move_backward, is_down);
 					}
-					else if (vkCode == 'A')
+					else if (vk_code == 'A')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveLeft, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->move_left, is_down);
 					}
-					else if (vkCode == 'D')
+					else if (vk_code == 'D')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveRight, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->move_right, is_down);
 					}
-					else if (vkCode == 'Q')
+					else if (vk_code == 'Q')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->action1, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->action1, is_down);
 					}
-					else if (vkCode == 'E')
+					else if (vk_code == 'E')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->action2, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->action2, is_down);
 					}
-					else if (vkCode == 'Z')
+					else if (vk_code == 'Z')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->action3, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->action3, is_down);
 					}
-					else if (vkCode == 'X')
+					else if (vk_code == 'X')
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->action4, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->action4, is_down);
 					}
-					else if (vkCode == VK_ESCAPE)
+					else if (vk_code == VK_ESCAPE)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->back, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->back, is_down);
 					}
-					else if (vkCode == VK_RETURN)
+					else if (vk_code == VK_RETURN)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->start, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->start, is_down);
 					}
-					else if (vkCode == VK_SPACE)
+					else if (vk_code == VK_SPACE)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->actionFire, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->main_click, is_down);
 					}
-					else if (vkCode == VK_UP)
+					else if (vk_code == VK_UP)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->action1, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->action1, is_down);
 					}
-					else if (vkCode == VK_DOWN)
+					else if (vk_code == VK_DOWN)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->action2, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->action2, is_down);
 					}
-					else if (vkCode == VK_LEFT)
+					else if (vk_code == VK_LEFT)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveLeft, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->move_left, is_down);
 					}
-					else if (vkCode == VK_RIGHT)
+					else if (vk_code == VK_RIGHT)
 					{
-						Win32::process_keyboard_mouse_event(&keyboardMouse->moveRight, isDown);
+						Win32::process_keyboard_mouse_event(&keyboard_mouse->move_right, is_down);
 					}
 				}
-				b32 altWasDown = TestBit(lParam, 29);
-				if ((vkCode == VK_F4) && altWasDown)
+				if ((vk_code == VK_F4) && alt_was_down)
 				{
 					Win32::g_is_running = false;
 				}
@@ -295,16 +279,15 @@ namespace Win32
 
 	internal void register_mouse_raw_input(HWND window = nullptr)
 	{
-		RAWINPUTDEVICE rawDevices[1];
+		RAWINPUTDEVICE raw_devices[1];
 		// Mouse registering info
-		rawDevices[0].usUsagePage = 0x01;
-		rawDevices[0].usUsage = 0x02;
-		rawDevices[0].dwFlags = 0;
-		rawDevices[0].hwndTarget = window;
+		raw_devices[0].usUsagePage = 0x01;
+		raw_devices[0].usUsage = 0x02;
+		raw_devices[0].dwFlags = 0;
+		raw_devices[0].hwndTarget = window;
 
-		if (RegisterRawInputDevices(rawDevices, 1, sizeof(rawDevices[0])) == FALSE)
+		if (RegisterRawInputDevices(raw_devices, 1, sizeof(raw_devices[0])) == FALSE)
 		{
-			//TODO: Proper handling in case of failure to register mouse and/or keyboard
 			MessageBoxA(NULL, "Could not register mouse and/or keyboard for raw input", "error", 0);
 			GameAssert(0);
 		}
@@ -312,10 +295,10 @@ namespace Win32
 
 	internal s32 get_monitor_freq()
 	{
-		DEVMODEA devInfo = {};
-		devInfo.dmSize = sizeof(DEVMODE);
-		EnumDisplaySettingsA(0, ENUM_CURRENT_SETTINGS, &devInfo);
-		return (s32)devInfo.dmDisplayFrequency;
+		DEVMODEA dev_info = {};
+		dev_info.dmSize = sizeof(DEVMODE);
+		EnumDisplaySettingsA(0, ENUM_CURRENT_SETTINGS, &dev_info);
+		return (s32)dev_info.dmDisplayFrequency;
 	}
 	
 	// ===============================================================================================================================
