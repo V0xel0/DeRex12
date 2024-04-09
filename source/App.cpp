@@ -104,6 +104,9 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 						camera->pitch = lib::clamp(camera->pitch, -0.49f * PI32, 0.49f * PI32);
 						camera->yaw		= lib::mod_pi(camera->yaw);
 					}
+					
+					camera->fov = camera->fov + -controller.mouse.delta_wheel * 0.1f;
+					camera->fov = lib::clamp(camera->fov, 3.0f, 100.0f);
 				}
 				
 				lib::Vec3 cam_rightward = lib::normalize(lib::cross(camera->forward, { 0.0f, 1.0f, 0.0f }));
