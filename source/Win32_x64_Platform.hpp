@@ -36,6 +36,14 @@ namespace Win32
 		s32 target_fps;
 		u64 clock_freq;
 	};
+	
+	struct App_DLL
+	{
+		HMODULE code_dll;
+		FILETIME last_change;
+		app_update_ptr* update_func;
+		b32 is_valid;
+	};
 
 	global_variable b32 g_is_running = true;
 

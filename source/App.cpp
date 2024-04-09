@@ -6,6 +6,11 @@
 #include "Views.hpp"
 #include "Math.hpp"
 
+#pragma warning(push, 0)   
+#define CGLTF_IMPLEMENTATION
+#include "cgltf.h"
+#pragma warning(pop)
+
 // Later different RHI possible
 #define RHI_D3D12
 #ifdef RHI_D3D12
@@ -65,6 +70,7 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		                  3, 2, 6, 3, 6, 7,
 		                  1, 5, 6, 1, 6, 2,
 		                  4, 0, 3, 4, 3, 7);
+		
 		
 		rhi_init(rhi, window->handle, window->width, window->height);
 		data_to_rhi->default_pipeline = create_basic_pipeline(device, L"../source/shaders/simple.hlsl");

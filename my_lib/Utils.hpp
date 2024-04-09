@@ -65,7 +65,7 @@ DummyDefer<F> defer(F f)
 	return DummyDefer<F>(f);
 }
 
-const auto* get_const_ptr(const auto& obj) {
+inline const auto* get_cptr(const auto& obj) {
 	return &obj;
 }
 

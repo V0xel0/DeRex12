@@ -118,15 +118,15 @@ namespace DX
 		auto* device = dev->ptr;
 		Memory_Heap out{};
 		
-		THR(device->CreateCommittedResource(get_const_ptr<D3D12_HEAP_PROPERTIES>({ .Type = type }),
+		THR(device->CreateCommittedResource(get_cptr<D3D12_HEAP_PROPERTIES>({ .Type = type }),
 		                                    D3D12_HEAP_FLAG_NONE,
-		                                    get_const_ptr(CD3DX12_RESOURCE_DESC::Buffer(max_bytes)),
+		                                    get_cptr(CD3DX12_RESOURCE_DESC::Buffer(max_bytes)),
 		                                    D3D12_RESOURCE_STATE_GENERIC_READ,
 		                                    nullptr,
 		                                    IID_PPV_ARGS(&out.heap)));
 		
 		THR(out.heap->Map(0, 
-		                  get_const_ptr<D3D12_RANGE>({ .Begin = 0, .End = 0 }), 
+		                  get_cptr<D3D12_RANGE>({ .Begin = 0, .End = 0 }), 
 		                  (void**) &out.heap_arena.base));
 		
 		out.gpu_base = out.heap->GetGPUVirtualAddress();
@@ -422,11 +422,11 @@ namespace DX
 					       (DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 
 					THR(device->CreateCommittedResource(
-						get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+						get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 						D3D12_HEAP_FLAG_NONE,
 						&dsv_texture.desc,
 						D3D12_RESOURCE_STATE_DEPTH_WRITE,
-						get_const_ptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
+						get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
 						IID_PPV_ARGS(&dsv_texture.ptr)
 					));
 					dsv_heap->SetName(L"Depth/Stencil Resource Heap");
@@ -460,7 +460,7 @@ namespace DX
 			
 			// Clear rtv & dsv
 			{
-				ctx->cmd_list->ResourceBarrier(1, get_const_ptr(CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
+				ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 				                                                                                    D3D12_RESOURCE_STATE_PRESENT,
 				                                                                                    D3D12_RESOURCE_STATE_RENDER_TARGET)));
 				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
@@ -496,8 +496,8 @@ namespace DX
 			// Populate command list
 			{
 				// Default state
-				ctx->cmd_list->RSSetViewports(1, get_const_ptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
-				ctx->cmd_list->RSSetScissorRects(1, get_const_ptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
+				ctx->cmd_list->RSSetViewports(1, get_cptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
+				ctx->cmd_list->RSSetScissorRects(1, get_cptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
 				ctx->cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				
 				// Drawing static data
@@ -528,7 +528,7 @@ namespace DX
 			
 			// Present
 			{
-				ctx->cmd_list->ResourceBarrier(1, get_const_ptr
+				ctx->cmd_list->ResourceBarrier(1, get_cptr
 				                             (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 				                                                                   D3D12_RESOURCE_STATE_RENDER_TARGET,
 				                                                                   D3D12_RESOURCE_STATE_PRESENT)));

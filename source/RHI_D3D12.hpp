@@ -141,7 +141,7 @@ namespace DX
 		const u32 buffer_size = data_cpu.size * sizeof(T);
 		const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
 			
-		THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
 																				D3D12_HEAP_FLAG_NONE,
 																				&desc,
 																				D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -156,7 +156,7 @@ namespace DX
 	
 		out.desc = desc;
 		out.state = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		THR(device->CreateCommittedResource(get_const_ptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 																				D3D12_HEAP_FLAG_NONE,
 																				&desc,
 																				D3D12_RESOURCE_STATE_COMMON,
@@ -164,7 +164,7 @@ namespace DX
 																				IID_PPV_ARGS(&out.ptr)));
 			
 		cmd_list->CopyResource(out.ptr, vb_staging);
-		cmd_list->ResourceBarrier(1, get_const_ptr(CD3DX12_RESOURCE_BARRIER::Transition
+		cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
 																																					(out.ptr, 
 																																						D3D12_RESOURCE_STATE_COPY_DEST, 
 																																						out.state)));
