@@ -362,7 +362,7 @@ namespace Win32
 	// ===============================================================================================================================
 	// ================================================= DEBUG INTERNAL FUNCTIONS ====================================================
 	// ===============================================================================================================================
-#if GAME_INTERNAL
+#if 0
 	Debug_File_Output debug_read_file(const char *fileName)
 	{
 		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
@@ -442,6 +442,52 @@ namespace Win32
 		}
 	}
 #endif
+	
+	internal FILETIME get_file_write_time(const char *name)
+	{
+		FILETIME out{};
+		
+		WIN32_FILE_ATTRIBUTE_DATA data;
+		if (GetFileAttributesExA(name, GetFileExInfoStandard, &data ))
+		{
+			out = data.ftLastWriteTime;
+		}
+		
+		return out;
+	}
+	
+	// ===============================================================================================================================
+	// ================================================= HOT RELOAD ====================================================
+	// ===============================================================================================================================
+	
+	internal App_DLL load_app_dll(const char* dll_path, const char* temp_dll_path)
+	{
+		App_DLL out{};
+		
+		out.last_change = Win32::get_file_write_time(dll_path);
+		CopyFileA(dll_path, temp_dll_path, FALSE);
+		out.code_dll = LoadLibraryA(temp_dll_path);
 
+		if(out.code_dll)
+		{
+			out.update_func = (app_update_ptr *)GetProcAddress(out.code_dll, "app_full_update");
+			out.is_valid = (out.update_func != nullptr);
+		}
+		AlwaysAssert(out.update_func != 0 && "Loading dll failed!");
+		
+		return out;
+	}
+	
+	internal void unload_app_dll(App_DLL* app_code)
+	{
+		AlwaysAssert(app_code != 0 && "Trying to free invalid game code!");
+		if(app_code->code_dll)
+		{
+			FreeLibrary(app_code->code_dll);
+			app_code->code_dll = nullptr;
+		}
+		app_code->is_valid = false;
+		app_code->update_func = nullptr;
+	}
 
 } // namespace Win32

@@ -14,6 +14,9 @@
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+	const char* app_dll_path 			= "../build/App.dll";
+	const char* app_dll_temp_path = "../build/AppTemp.dll";
+	
 	SYSTEM_INFO windows_info{};
 	GetSystemInfo(&windows_info);
 	auto cores_count = windows_info.dwNumberOfProcessors;
@@ -53,13 +56,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Game_Input* new_inputs = &game_input_buffer[0];
 	Game_Input* old_inputs = &game_input_buffer[1];
 	
-	app_update_ptr *update_app = app_full_update;
+	Win32::App_DLL app_code = Win32::load_app_dll(app_dll_path, app_dll_temp_path);
 	u64 ticks_loop_start = Win32::get_performance_ticks();
 	
 	while (Win32::g_is_running)
 	{
 		u64 tick_start = Win32::get_performance_ticks();
 		static u32 counter;
+		
+		// Check if there is new app dll to update
+		FILETIME app_dll_new_time = Win32::get_file_write_time(app_dll_path);
+		if(CompareFileTime(&app_dll_new_time, &app_code.last_change) != 0)
+		{	
+			Win32::unload_app_dll(&app_code);
+			app_code = Win32::load_app_dll(app_dll_path, app_dll_temp_path);
+		}
 		
 		// Input handling
 		Game_Controller* oldKeyboardMouseController = get_game_controller(old_inputs, 0);
@@ -95,7 +106,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		game_window.height = new_height;
 		game_window.is_closed = Win32::g_is_running ? false : true;
 		game_window.time_ms = Win32::get_elapsed_ms_here(clock, ticks_loop_start);
-		update_app(&game_memory, &game_window, new_inputs);
+		app_code.update_func(&game_memory, &game_window, new_inputs);
 		
 		f64 frame_time_ms = Win32::get_elapsed_ms_here(clock, tick_start);
 		swap(old_inputs, new_inputs);

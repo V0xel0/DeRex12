@@ -15,10 +15,10 @@
 		<CleanCommand>$(RootWorkspaceDirectory)/build.bat -$(Configuration)</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand>run.bat</RunCommand>
+		<RunCommand>$(RootWorkspaceDirectory)/run.bat</RunCommand>
 		<RunCommandWorkingDirectory></RunCommandWorkingDirectory>
 		<DebugCommand>remedybg.exe start-debugging</DebugCommand>
-		<ExePathCommand>$(RootWorkspaceDirectory)/build/main.exe</ExePathCommand>
+		<ExePathCommand>$(RootWorkspaceDirectory)/build/DeRex12.exe</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
 		<Configurations>
