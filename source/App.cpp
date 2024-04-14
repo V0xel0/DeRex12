@@ -11,21 +11,9 @@
 #include "cgltf.h"
 #pragma warning(pop)
 
-// Later different RHI possible
-#define RHI_D3D12
-#ifdef RHI_D3D12
-#include "RHI_D3D12.hpp"
-using namespace DX;
-#endif
-
 #include "Game_Services.hpp"
 #include "Render_Data.hpp"
 #include "App.hpp"
-
-#undef max
-#undef Max
-#undef min
-#undef Min
 
 inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.15f)
 {
@@ -34,14 +22,12 @@ inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 spee
 	return out + dir * speed;
 }
 
-extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
+extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
 {
 	App_State* app_state = (App_State*)memory->permanent_storage;
-	auto* rhi 				= &app_state->rhi;
-	auto* device 			= &app_state->rhi.device;
-	auto* ctx_direct 	= &app_state->rhi.ctx_direct;
 	auto* data_to_rhi = &app_state->data_for_rhi;
 	auto* camera 			= &app_state->camera;
+	app_state->data_for_rhi = {}; // zero every time
 	
 	if (!memory->is_initalized)
 	{
@@ -71,17 +57,13 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		                  1, 5, 6, 1, 6, 2,
 		                  4, 0, 3, 4, 3, 7);
 		
-		
-		rhi_init(rhi, window->handle, window->width, window->height);
-		data_to_rhi->default_pipeline = create_basic_pipeline(device, L"../source/shaders/simple.hlsl");
-		
-		data_to_rhi->verts		=		upload_static_data(device, ctx_direct, vertex_data);
-		data_to_rhi->indices	=		upload_static_data(device, ctx_direct, indices_data);
-		execute_and_wait(ctx_direct);
+		data_to_rhi->st_verts		=	vertex_data;
+		data_to_rhi->st_indices	=	indices_data;
+		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
+		data_to_rhi->is_new_static = true;
 		
 		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };
 		
-		arena_reset(&app_state->arena_assets);
 		memory->is_initalized = true;
 	}
 	
@@ -164,5 +146,5 @@ extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_I
 		}
 	}
 	
-	render_frame(rhi, data_to_rhi, window->width, window->height);
+	return data_to_rhi;
 }

@@ -31,10 +31,13 @@ if "%~1"=="-Release" (
 
 IF NOT EXIST .\build mkdir .\build
 pushd .\build
-REM del *.pdb > NUL 2> NUL
 
 REM Hot-Reload build
-cl.exe %compilerFlags% ../source/App.cpp /LD /link %dxcLib% %linkerLibs% RHI_D3D12.obj /EXPORT:app_full_update
-cl.exe %compilerFlags% %translation_units% /link %dxcLib% %linkerFlags% %linkerLibs%
+cl.exe %compilerFlags% ../source/App.cpp /LD /link /EXPORT:app_full_update
+
+if not "%~2"=="-Hot" (
+	echo [[ full build ]]
+	cl.exe %compilerFlags% %translation_units% /link %dxcLib% %linkerFlags% %linkerLibs%
+)
 
 popd

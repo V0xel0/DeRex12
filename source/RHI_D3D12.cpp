@@ -1,3 +1,24 @@
+/* TODO
+* 
+*	 2) Heaps + descriptors creation & abstraction
+*	 3) Pools + handles
+*	 4) Data manager for GPU/CPU renderable resources
+*	 6) Shader abstraction
+*	 7) rhi_run() split
+*  8) Shader compilation improvements: reflection, signature from shader, output debug
+*  9) Shader creation code compression, caching for results, save pdb's and reflection, recompile if new hash
+* 10) "Pipeline" struct may be changed to binary relation 1..n of '1' root signature to 'n' PSOs
+* 				This could be done as 2D array instead of generic solution like: https://github.com/RonPieket/BinaryRelations
+* 11) Maybe also reset gpu_memory in "execute_and_wait"?
+* 12) upload_static_data has to be changed to be a data thats const per "level" and needs upload 
+* 			to default heap. In data sent from app to rhi then we would have 2 streams of data depending
+* 			on frequency -> or streams of render passses later
+* 13) Might reduce quering in sync_with_fence for GetCompletedValue by quering in if only and compare
+* 			with fence_counter instead
+* 14) RHI_State seperation for logical & data, also caching system for it
+* 15) create_basic_pipeline has to be split from shader creation and maybe generalized to any pipeline 
+* */
+
 #include "Utils.hpp"
 #include "Allocators.hpp"
 #include "GameAsserts.hpp"
@@ -18,6 +39,8 @@ namespace DX
 	internal constexpr u32 g_alloc_alignment = 256;
 	internal constexpr u64 g_upload_heap_max_size = MiB(20);
 	
+	internal RHI_State g_state{};
+		
 	[[nodiscard]]
 	internal u64 signal(Context* ctx)
 	{
@@ -43,7 +66,7 @@ namespace DX
 		sync_with_fence(&ctx->fence, value_to_signal);
 	}
 	
-	extern void execute_and_wait(Context* ctx)
+	internal void execute_and_wait(Context* ctx)
 	{
 		THR(ctx->cmd_list->Close());
 		ID3D12CommandList* const commandLists[] = { ctx->cmd_list };
@@ -136,7 +159,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal auto allocate_gpu_memory(Memory_Heap* heap, u64 size)
+	internal auto push_to_gpu_heap(Memory_Heap* heap, u64 size)
 	{
 		struct { u8* addr_cpu; D3D12_GPU_VIRTUAL_ADDRESS addr_gpu; }out;
 		out.addr_cpu = (u8*)allocate(&heap->heap_arena, size, g_alloc_alignment);
@@ -149,9 +172,9 @@ namespace DX
 		arena_reset(&heap->heap_arena);
 	}
 	
-	extern void rhi_init(RHI_State* state, void* win_handle, u32 client_width, u32 client_height)
+	internal void rhi_init(RHI_State* state, void* win_handle, u32 client_width, u32 client_height)
 	{
-		auto* ctx = &state->ctx_direct;
+		auto* ctx = &g_state.ctx_direct;
 		
 		IDXGIFactory4* factory = nullptr;
 		u32 factory_flags = 0;
@@ -209,9 +232,9 @@ namespace DX
 		}
 			
 		// Create Device
-		THR(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&state->device.ptr)));
+		THR(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&g_state.device.ptr)));
 		#ifdef _DEBUG
-		THR(state->device.ptr->QueryInterface(&state->device.d_ptr));
+		THR(g_state.device.ptr->QueryInterface(&g_state.device.d_ptr));
 		#endif
 			
 		// Create Command Queue
@@ -223,7 +246,7 @@ namespace DX
 				.Flags		= D3D12_COMMAND_QUEUE_FLAG_NONE, 
 				.NodeMask	= 0 
 			};
-			THR(state->device.ptr->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&ctx->queue)));
+			THR(g_state.device.ptr->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&ctx->queue)));
 		}
 		
 		// Create Swap chain
@@ -245,8 +268,8 @@ namespace DX
 			
 			IDXGISwapChain1* temp_swapchain = nullptr;
 			THR(factory->CreateSwapChainForHwnd(ctx->queue, (HWND)win_handle, &swapchain_desc, 0, 0, &temp_swapchain));
-			THR(temp_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&state->swapchain));
-			state->frame_index = state->swapchain->GetCurrentBackBufferIndex();
+			THR(temp_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&g_state.swapchain));
+			g_state.frame_index = g_state.swapchain->GetCurrentBackBufferIndex();
 			
 			temp_swapchain->Release();
 		}
@@ -260,8 +283,8 @@ namespace DX
 				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 				.NodeMask				= 0
 			};
-			THR(state->device.ptr->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&state->rtv_heap)));
-			state->rtv_descriptor_size = state->device.ptr->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+			THR(g_state.device.ptr->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&g_state.rtv_heap)));
+			g_state.rtv_descriptor_size = g_state.device.ptr->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
 		
 		// Create DSV heap
@@ -273,42 +296,42 @@ namespace DX
 				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 				.NodeMask				= 0
 			};
-			THR(state->device.ptr->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&state->dsv_heap)));
+			THR(g_state.device.ptr->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&g_state.dsv_heap)));
 		}
 		
 		// Create heaps
 		{
 			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
 			{
-				state->upload_heaps[frame_i] = create_memory_heap(&state->device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
+				g_state.upload_heaps[frame_i] = create_memory_heap(&g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
 			}
 		}
 		
 		// Create fence
-		THR(state->device.ptr->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
+		THR(g_state.device.ptr->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
 		ctx->fence.fence_event = CreateEvent(0, false, false, 0);
 		AlwaysAssert(ctx->fence.fence_event && "Failed creation of fence event");
 		
 		// Create Command Allocators
 		for (u32 i = 0; i < g_count_backbuffers; i++)
 		{
-			THR(state->device.ptr->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
+			THR(g_state.device.ptr->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
 			                                   IID_PPV_ARGS(&ctx->cmd_allocators[i])));
 			THR(ctx->cmd_allocators[i]->Reset());
 		}
 		
 		// Create Initial Command List
-		THR(state->device.ptr->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
-		                              ctx->cmd_allocators[state->frame_index], nullptr,
+		THR(g_state.device.ptr->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+		                              ctx->cmd_allocators[g_state.frame_index], nullptr,
 		                              IID_PPV_ARGS(&ctx->cmd_list)));
 		THR(ctx->cmd_list->Close());
-		THR(ctx->cmd_list->Reset(ctx->cmd_allocators[state->frame_index], nullptr));
+		THR(ctx->cmd_list->Reset(ctx->cmd_allocators[g_state.frame_index], nullptr));
 		
-		state->is_initalized = true;
+		g_state.is_initalized = true;
 	}
 	
 	[[nodiscard]]
-	extern Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path)
+	internal Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path)
 	{
 		auto* device = dev->ptr;
 		Pipeline out{};
@@ -356,203 +379,221 @@ namespace DX
 		return out;
 	}
 	
-	extern void render_frame(RHI_State* state, Data_To_RHI* data_from_app, u32 new_width, u32 new_height)
-	{
-		// TEMPORARY helper autos
-		auto* ctx 		= &state->ctx_direct; // for now only direct context
-		auto* device 	= state->device.ptr;
-		
-		auto& width 	= state->width;
-		auto& height 	= state->height;
-		
-		auto* swapchain 					= state->swapchain;
-		auto* rtv_heap 						= state->rtv_heap;
-		auto* rtv_texture 				= state->rtv_texture;
-		auto& rtv_descriptor_size	= state->rtv_descriptor_size;
-		auto* dsv_heap 						= state->dsv_heap;
-		auto& dsv_texture 				= state->dsv_texture;
-		
-		auto& fence_values 	= state->fence_values;
-		auto& frame_index 	= state->frame_index;
-		
-		auto& vertices_static 	= data_from_app->verts;
-		auto& indices_static 		= data_from_app->indices;
-		auto& pipeline_default 	= data_from_app->default_pipeline;
-		
-		// RTV & DSV check for re/creation
-		if (new_width != width || new_height != height || !rtv_texture[0])
-		{
-			width	= new_width;
-			height = new_height;
-			
-			wait_for_work(ctx);
-			
-			if (rtv_texture[0])
-			{
-				for (u32 i = 0; i < g_count_backbuffers; i++)
-				{
-					rtv_texture[i]->Release();
-					rtv_texture[i] = nullptr;
-					fence_values[i] = fence_values[frame_index];
-				}
-			}
-			
-			if (width && height)
-			{
-				// Resize swap chain
-				DXGI_SWAP_CHAIN_DESC swapchain_desc{};
-				THR(swapchain->GetDesc(&swapchain_desc));
-				THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
-				                             swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
-			
-				frame_index = swapchain->GetCurrentBackBufferIndex();
-			
-				// Create/Update RTV textures
-				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
-				for (u32 i = 0; i < g_count_backbuffers; i++)
-				{
-					THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
-					device->CreateRenderTargetView(rtv_texture[i], nullptr, rtv_handle);
-					rtv_handle.Offset(1, rtv_descriptor_size);
-				}
-				
-				// Create/Update DSV, depth texture
-				{
-					dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
-					       (DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+} // namespace DX
 
-					THR(device->CreateCommittedResource(
-						get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-						D3D12_HEAP_FLAG_NONE,
-						&dsv_texture.desc,
-						D3D12_RESOURCE_STATE_DEPTH_WRITE,
-						get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
-						IID_PPV_ARGS(&dsv_texture.ptr)
-					));
-					dsv_heap->SetName(L"Depth/Stencil Resource Heap");
-					
-					// Create/Update descriptor/view
-					{
-						D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
-						{
-							.Format 						=	DXGI_FORMAT_D32_FLOAT,
-							.ViewDimension 			= D3D12_DSV_DIMENSION_TEXTURE2D,
-							.Flags 							= D3D12_DSV_FLAG_NONE,
-							.Texture2D {.MipSlice = 0}
-						};
-						device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
-						                               dsv_heap->GetCPUDescriptorHandleForHeapStart());
-					}
-				}
+extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
+{
+	using namespace DX;
+	
+	if (!g_state.is_initalized)
+	{
+		rhi_init(&g_state, window->handle, window->width, window->height);
+	}
+	// TEMPORARY helper autos, wish to have Odin/Jai "using" feature
+	auto* ctx 		= &g_state.ctx_direct; // for now only direct context
+	auto* device 	= g_state.device.ptr;
+		
+	auto& width			= g_state.width;
+	auto& height		= g_state.height;
+	auto new_width	= window->width;
+	auto new_height = window->height;
+		
+	auto* swapchain 					= g_state.swapchain;
+	auto* rtv_heap 						= g_state.rtv_heap;
+	auto* rtv_texture 				= g_state.rtv_texture;
+	auto& rtv_descriptor_size	= g_state.rtv_descriptor_size;
+	auto* dsv_heap 						= g_state.dsv_heap;
+	auto& dsv_texture 				= g_state.dsv_texture;
+		
+	auto& fence_values 	= g_state.fence_values;
+	auto& frame_index 	= g_state.frame_index;
+	
+	auto& vertices_static = g_state.vertices_static;
+	auto& indices_static 	= g_state.indices_static;
+	auto& static_pso 			= g_state.static_pso;
+
+	// Static data upload
+	if(data_from_app->is_new_static)
+	{
+		vertices_static = upload_static_data(&g_state.device, ctx, data_from_app->st_verts);
+		indices_static 	= upload_static_data(&g_state.device, ctx, data_from_app->st_indices);
+		static_pso 			= create_basic_pipeline(&g_state.device, data_from_app->shader_path);
+		execute_and_wait(ctx);
+	}
+		
+	// RTV & DSV check for re/creation
+	if (new_width != width || new_height != height || !rtv_texture[0])
+	{
+		width	= new_width;
+		height = new_height;
+			
+		wait_for_work(ctx);
+			
+		if (rtv_texture[0])
+		{
+			for (u32 i = 0; i < g_count_backbuffers; i++)
+			{
+				rtv_texture[i]->Release();
+				rtv_texture[i] = nullptr;
+				fence_values[i] = fence_values[frame_index];
 			}
 		}
 			
-		// D3D12 render
 		if (width && height)
 		{
-			auto cmd_alloc = ctx->cmd_allocators[frame_index];
-			auto backbuffer = rtv_texture[frame_index];
-			auto* upload_heap = &state->upload_heaps[frame_index];
+			// Resize swap chain
+			DXGI_SWAP_CHAIN_DESC swapchain_desc{};
+			THR(swapchain->GetDesc(&swapchain_desc));
+			THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
+			                             swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
 			
-			THR(cmd_alloc->Reset());
-			// Reset current command list taken from current command allocator
-			THR(ctx->cmd_list->Reset(cmd_alloc, pipeline_default.pso));
+			frame_index = swapchain->GetCurrentBackBufferIndex();
 			
-			// Clear rtv & dsv
+			// Create/Update RTV textures
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
+			for (u32 i = 0; i < g_count_backbuffers; i++)
 			{
-				ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
-				                                                                                    D3D12_RESOURCE_STATE_PRESENT,
-				                                                                                    D3D12_RESOURCE_STATE_RENDER_TARGET)));
-				lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
-				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
-				                                         frame_index, rtv_descriptor_size);
-				CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->GetCPUDescriptorHandleForHeapStart());
+				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
+				device->CreateRenderTargetView(rtv_texture[i], nullptr, rtv_handle);
+				rtv_handle.Offset(1, rtv_descriptor_size);
+			}
 				
-				ctx->cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
-				ctx->cmd_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-				ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
-			}
-			
-			// Push per frame constants
-			D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame{};
+			// Create/Update DSV, depth texture
 			{
-				const auto [cpu_addr, gpu_addr] = allocate_gpu_memory(upload_heap, sizeof(Constant_Data_Frame));
-				cbv_gpu_addr_frame = gpu_addr;
-				Constant_Data_Frame* frame_consts = (Constant_Data_Frame*)cpu_addr;
-				// Copy to gpu upload heap
-				*frame_consts = data_from_app->cb_frame;
-			}
-			
-			// Push per draw constants
-			D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw{};
-			{
-				const auto [cpu_addr, gpu_addr] = allocate_gpu_memory(upload_heap, sizeof(Constant_Data_Draw));
-				cbv_gpu_addr_draw = gpu_addr;
-				Constant_Data_Draw* draw_consts = (Constant_Data_Draw*)cpu_addr;
-				// Copy to gpu upload heap
-				*draw_consts = data_from_app->cb_draw;
-			}
-			
-			// Populate command list
-			{
-				// Default state
-				ctx->cmd_list->RSSetViewports(1, get_cptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
-				ctx->cmd_list->RSSetScissorRects(1, get_cptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
-				ctx->cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				
-				// Drawing static data
+				dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
+				          (DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+
+				THR(device->CreateCommittedResource(
+					get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+					D3D12_HEAP_FLAG_NONE,
+					&dsv_texture.desc,
+					D3D12_RESOURCE_STATE_DEPTH_WRITE,
+					get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
+					IID_PPV_ARGS(&dsv_texture.ptr)
+				));
+				dsv_heap->SetName(L"Depth/Stencil Resource Heap");
+					
+				// Create/Update descriptor/view
 				{
-					//command_list->SetPipelineState(pso);
-					ctx->cmd_list->SetGraphicsRootSignature(pipeline_default.root_signature);
-					ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_frame);
-					ctx->cmd_list->SetGraphicsRootConstantBufferView(0, cbv_gpu_addr_draw);
-					D3D12_VERTEX_BUFFER_VIEW vb_view_static 
-					{ 
-						.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
-						.SizeInBytes = (UINT)vertices_static.desc.Width,
-						.StrideInBytes = sizeof(Vertex)
-					};
-					ctx->cmd_list->IASetVertexBuffers(0, 1, &vb_view_static);
-					D3D12_INDEX_BUFFER_VIEW ib_view_static
+					D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
 					{
-						.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
-						.SizeInBytes = (UINT)indices_static.desc.Width,
-						.Format = DXGI_FORMAT_R16_UINT
+						.Format 						=	DXGI_FORMAT_D32_FLOAT,
+						.ViewDimension 			= D3D12_DSV_DIMENSION_TEXTURE2D,
+						.Flags 							= D3D12_DSV_FLAG_NONE,
+						.Texture2D {.MipSlice = 0}
 					};
-				
-					ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
-					ctx->cmd_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
-					//ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
+					device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
+					                               dsv_heap->GetCPUDescriptorHandleForHeapStart());
 				}
 			}
+		}
+	}
 			
-			// Present
+	// D3D12 render
+	if (width && height)
+	{
+		auto cmd_alloc = ctx->cmd_allocators[frame_index];
+		auto backbuffer = rtv_texture[frame_index];
+		auto* upload_heap = &g_state.upload_heaps[frame_index];
+			
+		THR(cmd_alloc->Reset());
+		// Reset current command list taken from current command allocator
+		THR(ctx->cmd_list->Reset(cmd_alloc, static_pso.pso));
+			
+		// Clear rtv & dsv
+		{
+			ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
+			                                                                                D3D12_RESOURCE_STATE_PRESENT,
+			                                                                                D3D12_RESOURCE_STATE_RENDER_TARGET)));
+			lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
+			                                         frame_index, rtv_descriptor_size);
+			CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->GetCPUDescriptorHandleForHeapStart());
+				
+			ctx->cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
+			ctx->cmd_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+			ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
+		}
+			
+		// Push per frame constants
+		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame{};
+		{
+			const auto [cpu_addr, gpu_addr] = push_to_gpu_heap(upload_heap, sizeof(Constant_Data_Frame));
+			cbv_gpu_addr_frame = gpu_addr;
+			Constant_Data_Frame* frame_consts = (Constant_Data_Frame*)cpu_addr;
+			// Copy to gpu upload heap
+			*frame_consts = data_from_app->cb_frame;
+		}
+			
+		// Push per draw constants
+		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw{};
+		{
+			const auto [cpu_addr, gpu_addr] = push_to_gpu_heap(upload_heap, sizeof(Constant_Data_Draw));
+			cbv_gpu_addr_draw = gpu_addr;
+			Constant_Data_Draw* draw_consts = (Constant_Data_Draw*)cpu_addr;
+			// Copy to gpu upload heap
+			*draw_consts = data_from_app->cb_draw;
+		}
+			
+		// Populate command list
+		{
+			// Default state
+			ctx->cmd_list->RSSetViewports(1, get_cptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
+			ctx->cmd_list->RSSetScissorRects(1, get_cptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
+			ctx->cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				
+			// Drawing static data
 			{
-				ctx->cmd_list->ResourceBarrier(1, get_cptr
-				                             (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
-				                                                                   D3D12_RESOURCE_STATE_RENDER_TARGET,
-				                                                                   D3D12_RESOURCE_STATE_PRESENT)));
-				THR(ctx->cmd_list->Close());
+				//command_list->SetPipelineState(pso);
+				ctx->cmd_list->SetGraphicsRootSignature(static_pso.root_signature);
+				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_frame);
+				ctx->cmd_list->SetGraphicsRootConstantBufferView(0, cbv_gpu_addr_draw);
 				
-				ID3D12CommandList* const commandLists[] = { ctx->cmd_list };
-				ctx->queue->ExecuteCommandLists(_countof(commandLists), commandLists);
+				D3D12_VERTEX_BUFFER_VIEW vb_view_static 
+				{ 
+					.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
+					.SizeInBytes = (UINT)vertices_static.desc.Width,
+					.StrideInBytes = sizeof(Vertex)
+				};
+				ctx->cmd_list->IASetVertexBuffers(0, 1, &vb_view_static);
 				
-				// Present current backbuffer
-				THR(swapchain->Present(1, 0));
+				D3D12_INDEX_BUFFER_VIEW ib_view_static
+				{
+					.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
+					.SizeInBytes = (UINT)indices_static.desc.Width,
+					.Format = DXGI_FORMAT_R16_UINT
+				};
 				
-				// Signal the end of direct context work for this frame and store its value for later synchronization
-				fence_values[frame_index] = signal(ctx);
-				
-				// Get next backbuffer index - updated on swapchain by Present()
-				frame_index = swapchain->GetCurrentBackBufferIndex();
-				
-				// Wait for fence value from frame (n-1) - not waiting on current frame
-				sync_with_fence(&ctx->fence, fence_values[frame_index]);
-				// Upload heap from frame (n-1) is safe to reset cause work from that frame has finished
-				reset_gpu_memory(&state->upload_heaps[frame_index]);
+				ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
+				ctx->cmd_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
+				//ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
 			}
 		}
-		
+			
+		// Present
+		{
+			ctx->cmd_list->ResourceBarrier(1, get_cptr
+			                                (CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
+			                                                                      D3D12_RESOURCE_STATE_RENDER_TARGET,
+			                                                                      D3D12_RESOURCE_STATE_PRESENT)));
+			THR(ctx->cmd_list->Close());
+				
+			ID3D12CommandList* const commandLists[] = { ctx->cmd_list };
+			ctx->queue->ExecuteCommandLists(_countof(commandLists), commandLists);
+				
+			// Present current backbuffer
+			THR(swapchain->Present(1, 0));
+				
+			// Signal the end of direct context work for this frame and store its value for later synchronization
+			fence_values[frame_index] = signal(ctx);
+				
+			// Get next backbuffer index - updated on swapchain by Present()
+			frame_index = swapchain->GetCurrentBackBufferIndex();
+				
+			// Wait for fence value from frame (n-1) - not waiting on current frame
+			sync_with_fence(&ctx->fence, fence_values[frame_index]);
+			// Upload heap from frame (n-1) is safe to reset cause work from that frame has finished
+			reset_gpu_memory(&g_state.upload_heaps[frame_index]);
+		}
 	}
-	
-} // namespace DX
+}

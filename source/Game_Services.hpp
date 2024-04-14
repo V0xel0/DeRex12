@@ -1,14 +1,5 @@
 #pragma once
 
-struct Game_Window
-{
-	void* handle;
-	f64 time_ms;
-	u32 width;
-	u32 height;
-	b32 is_closed;
-};
-
 struct Game_Key_State
 {
 	s32 halfTransCount;
@@ -86,5 +77,8 @@ inline Game_Controller *get_game_controller(Game_Input *input, u32 controllerID)
 	return &input->controllers[controllerID];
 }
 
-extern "C" void app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs);
+struct Data_To_RHI;
+struct Game_Window;
+
+extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs);
 using app_update_ptr = decltype(app_full_update);

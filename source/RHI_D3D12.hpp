@@ -3,27 +3,6 @@
 // Header represent functions and types that need to be implemented by every RHI
 // Only external (non-namespaced) structures and functions needs to be implemented by RHI implementation
 
-/* TODOs
- * 
- * 	0) Consider moving whole RHI to different TU or part of platform
- * 				ideally just get "what to render" (unified msg) from application and own RHI-state memory
- * 						basically similar in desing to application itself
- *	2) Heaps + descriptors creation & abstraction
- *	3) Pools + handles
- *	4) Data manager for GPU/CPU renderable resources
- *	6) Shader abstraction
- *	7) Render() split
- * 	8) Shader compilation improvements: reflection, signature from shader, output debug
- * 	9) Shader creation code compression, caching for results, save pdb's and reflection, recompile if new hash
- * 10) "Pipeline" struct may be changed to binary relation 1..n of '1' root signature to 'n' PSOs
- * 				This could be done as 2D array instead of generic solution like: https://github.com/RonPieket/BinaryRelations
- * 11) Maybe also reset gpu_memory in "execute_and_wait"?
- * 12) upload_static_data has to be changed to be a data thats const per "level" and needs upload 
- * 			to default heap. In data sent from app to rhi then we would have 2 streams of data depending
- * 			on frequency -> or streams of render passses later
- * 13) Might reduce quering in sync_with_fence for GetCompletedValue by quering in if only and compare
- * 			with fence_counter instead
- * */
 #include "d3dx12.h"
 #ifdef _DEBUG
 #include <dxgidebug.h>
@@ -96,9 +75,10 @@ struct Context
 	
 	DX::Fence fence;
 };
- 
+
 struct RHI_State
 {
+	// Logical State
 	Device device;
 	Context ctx_direct;
 	
@@ -119,16 +99,15 @@ struct RHI_State
 	b32 vsync;
 	u32 width;
 	u32 height;
+	
+	// Data State
+	GPU_Resource vertices_static;
+	GPU_Resource indices_static;
+	Pipeline static_pso;
 };
 
 namespace DX
 {
-	extern void rhi_init(RHI_State* state, void* win_handle, u32 client_width, u32 client_height);
-	extern void render_frame(RHI_State* state, Data_To_RHI* gpu_static, u32 new_width, u32 new_height);
-	extern void execute_and_wait(Context* ctx);
-	
-	extern Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path);
-	
 	template <typename T>
 	[[nodiscard]]
 	GPU_Resource upload_static_data(Device* dev, Context* ctx, Array_View<T>data_cpu)

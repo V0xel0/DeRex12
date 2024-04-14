@@ -296,7 +296,7 @@ namespace lib
 	inline Vec2 refract_fast(const Vec2 a, const Vec2 b, const f32 ratio)
 	{
 		//TODO: This will be specialized implementation for known materials (eg. only air - water refraction)
-		assert(0 && "THIS IS NOT IMPLEMETED YET!");
+		__debugbreak();
 	}
 
 	inline Vec2 project(const Vec2 a, const Vec2 b)

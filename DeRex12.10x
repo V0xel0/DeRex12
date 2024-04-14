@@ -11,7 +11,7 @@
 		<IsFolder>false</IsFolder>
 		<BuildCommand>$(RootWorkspaceDirectory)/build.bat -$(Configuration)</BuildCommand>
 		<RebuildCommand>$(RootWorkspaceDirectory)/build.bat  -$(Configuration)</RebuildCommand>
-		<BuildFileCommand></BuildFileCommand>
+		<BuildFileCommand>$(RootWorkspaceDirectory)/build.bat  -$(Configuration) -Hot</BuildFileCommand>
 		<CleanCommand>$(RootWorkspaceDirectory)/build.bat -$(Configuration)</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
