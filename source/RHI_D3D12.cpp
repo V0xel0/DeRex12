@@ -171,6 +171,31 @@ namespace DX
 		arena_reset(&heap->heap_arena);
 	}
 	
+	[[nodiscard]]
+	internal Descriptor_Heap create_descriptor_heap(ID3D12Device2* device, u32 count_descriptors, 
+																				 D3D12_DESCRIPTOR_HEAP_TYPE type,
+																				 D3D12_DESCRIPTOR_HEAP_FLAGS flags)
+	{
+		Descriptor_Heap out{};
+			
+		D3D12_DESCRIPTOR_HEAP_DESC desc
+		{
+			.Type						= type,
+			.NumDescriptors	= count_descriptors,
+			.Flags					= flags,
+		};
+		THR(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&out.heap)));
+			
+		out.base.h_cpu = out.heap->GetCPUDescriptorHandleForHeapStart();
+		if (flags == D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)
+			out.base.h_gpu = out.heap->GetGPUDescriptorHandleForHeapStart();
+
+		out.max_size = count_descriptors;
+		out.descriptor_size = device->GetDescriptorHandleIncrementSize(type);
+			
+		return out;
+	}
+	
 	internal void rhi_init(RHI_State* state, void* win_handle, u32 client_width, u32 client_height)
 	{
 		auto* ctx = &g_state.ctx_direct;
@@ -298,6 +323,8 @@ namespace DX
 			THR(g_state.device->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&g_state.dsv_heap)));
 		}
 		
+
+		
 		// Create heaps
 		{
 			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
@@ -393,8 +420,6 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		
 	auto& width			= g_state.width;
 	auto& height		= g_state.height;
-	auto new_width	= window->width;
-	auto new_height = window->height;
 		
 	auto* swapchain 					= g_state.swapchain;
 	auto* rtv_heap 						= g_state.rtv_heap;
@@ -411,7 +436,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& static_pso 			= g_state.static_pso;
 
 	// Static data upload
-	if(data_from_app->is_new_static)
+	if (data_from_app->is_new_static)
 	{
 		vertices_static = upload_static_data(device, ctx, data_from_app->st_verts);
 		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices);
@@ -420,10 +445,10 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	}
 		
 	// RTV & DSV check for re/creation
-	if (new_width != width || new_height != height || !rtv_texture[0])
+	if (window->width != width || window->height != height || !rtv_texture[0])
 	{
-		width	= new_width;
-		height = new_height;
+		width	= window->width;
+		height = window->height;
 			
 		wait_for_work(ctx);
 			

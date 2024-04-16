@@ -45,6 +45,15 @@ namespace DX
 		ID3D12Resource* heap;
     D3D12_GPU_VIRTUAL_ADDRESS gpu_base;
 	};
+	
+	struct Descriptor_Heap
+	{
+		ID3D12DescriptorHeap* heap;
+		Descriptor base;
+		u32 size;
+		u32 max_size;
+		u32 descriptor_size;
+	};
 } // namespace DX
 
 // external structures
