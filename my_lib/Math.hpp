@@ -698,7 +698,7 @@ namespace lib
 	{
 		return  length_vec( cross(a, b) ) / length_vec(b);
 	}
-
+	
 	//? Column major matrix (each memory row is one column)
 	struct alignas(__m128) Mat4
 	{

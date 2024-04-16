@@ -372,7 +372,7 @@ namespace DX
 			pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 			pso_desc.NumRenderTargets = 1;
 			pso_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT; // Sync this!
-			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // Sync this!
+			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; // Sync this!
 			pso_desc.SampleDesc.Count = 1;
 			// For RH coordinate system, CCW winding order is needed
 			pso_desc.RasterizerState.FrontCounterClockwise = TRUE;
@@ -393,17 +393,17 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		rhi_init(&g_state, window->handle, window->width, window->height);
 	}
 	// TEMPORARY helper autos, wish to have Odin/Jai "using" feature
-	auto* ctx 		= &g_state.ctx_direct; // for now only direct context
-	auto* device 	= g_state.device;
+	auto* ctx			= &g_state.ctx_direct; // for now only direct context
+	auto* device	= g_state.device;
 		
-	auto& width			= g_state.width;
-	auto& height		= g_state.height;
+	auto& width		= g_state.width;
+	auto& height	= g_state.height;
 		
-	auto* swapchain 					= g_state.swapchain;
-	auto* rtv_heap 						= &g_state.rtv_heap;
-	auto* rtv_texture 				= g_state.rtv_texture;
-	auto* dsv_heap 						= &g_state.dsv_heap;
-	auto& dsv_texture 				= g_state.dsv_texture;
+	auto* swapchain 	= g_state.swapchain;
+	auto* rtv_heap 		= &g_state.rtv_heap;
+	auto* rtv_texture	= g_state.rtv_texture;
+	auto* dsv_heap 		= &g_state.dsv_heap;
+	auto& dsv_texture	= g_state.dsv_texture;
 		
 	auto& fence_values 	= g_state.fence_values;
 	auto& frame_index 	= g_state.frame_index;
@@ -451,10 +451,15 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			
 			// Create/Update RTV textures
 			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu);
+			D3D12_RENDER_TARGET_VIEW_DESC rtv_desc
+			{
+				.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, // Sync This!
+				.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D 
+			};
 			for (u32 i = 0; i < g_count_backbuffers; i++)
 			{
 				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
-				device->CreateRenderTargetView(rtv_texture[i], nullptr, rtv_handle);
+				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, rtv_handle);
 				rtv_handle.Offset(1, rtv_heap->descriptor_size);
 			}
 				
@@ -463,6 +468,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
 				          (DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 				dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+				RELEASE_SAFE(dsv_texture.ptr);
 				
 				THR(device->CreateCommittedResource(
 					get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
@@ -477,7 +483,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				{
 					D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
 					{
-						.Format 						=	DXGI_FORMAT_D32_FLOAT,
+						.Format 						=	DXGI_FORMAT_D32_FLOAT, // Sync This!
 						.ViewDimension 			= D3D12_DSV_DIMENSION_TEXTURE2D,
 						.Flags 							= D3D12_DSV_FLAG_NONE,
 						.Texture2D {.MipSlice = 0}
@@ -505,14 +511,13 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition(backbuffer, 
 			                                                                                D3D12_RESOURCE_STATE_PRESENT,
 			                                                                                D3D12_RESOURCE_STATE_RENDER_TARGET)));
-			lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
+			lib::Vec4 color { 0.262f, 0.514f, 0.672f, 1.0f };
 			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu,
 			                                         frame_index, rtv_heap->descriptor_size);
-			CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->base.h_cpu);
 				
 			ctx->cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
-			ctx->cmd_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-			ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
+			ctx->cmd_list->ClearDepthStencilView(dsv_heap->base.h_cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+			ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_heap->base.h_cpu);
 		}
 			
 		// Push per frame constants
