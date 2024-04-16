@@ -428,75 +428,68 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		height = window->height;
 			
 		wait_for_work(ctx);
-			
-		if (rtv_texture[0])
+		
+		for (u32 i = 0; i < g_count_backbuffers; i++)
 		{
-			for (u32 i = 0; i < g_count_backbuffers; i++)
-			{
-				rtv_texture[i]->Release();
-				rtv_texture[i] = nullptr;
-				fence_values[i] = fence_values[frame_index];
-			}
+			RELEASE_SAFE(rtv_texture[i]);
+			rtv_texture[i] = nullptr;
+			fence_values[i] = fence_values[frame_index];
 		}
+
+		// Resize swap chain
+		DXGI_SWAP_CHAIN_DESC swapchain_desc{};
+		THR(swapchain->GetDesc(&swapchain_desc));
+		THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
+																swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
 			
-		if (width && height)
+		frame_index = swapchain->GetCurrentBackBufferIndex();
+			
+		// Create/Update RTV textures
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu);
+		D3D12_RENDER_TARGET_VIEW_DESC rtv_desc
 		{
-			// Resize swap chain
-			DXGI_SWAP_CHAIN_DESC swapchain_desc{};
-			THR(swapchain->GetDesc(&swapchain_desc));
-			THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
-			                             swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
-			
-			frame_index = swapchain->GetCurrentBackBufferIndex();
-			
-			// Create/Update RTV textures
-			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu);
-			D3D12_RENDER_TARGET_VIEW_DESC rtv_desc
-			{
-				.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, // Sync This!
-				.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D 
-			};
-			for (u32 i = 0; i < g_count_backbuffers; i++)
-			{
-				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
-				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, rtv_handle);
-				rtv_handle.Offset(1, rtv_heap->descriptor_size);
-			}
+			.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, // Sync This!
+			.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D 
+		};
+		for (u32 i = 0; i < g_count_backbuffers; i++)
+		{
+			THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
+			device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, rtv_handle);
+			rtv_handle.Offset(1, rtv_heap->descriptor_size);
+		}
 				
-			// Create/Update DSV, depth texture
-			{
-				dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
-				          (DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-				dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-				RELEASE_SAFE(dsv_texture.ptr);
+		// Create/Update DSV, depth texture
+		{
+			dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
+								(DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+			dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+			RELEASE_SAFE(dsv_texture.ptr);
 				
-				THR(device->CreateCommittedResource(
-					get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-					D3D12_HEAP_FLAG_NONE,
-					&dsv_texture.desc,
-					D3D12_RESOURCE_STATE_DEPTH_WRITE,
-					get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
-					IID_PPV_ARGS(&dsv_texture.ptr)
-				));
+			THR(device->CreateCommittedResource(
+				get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+				D3D12_HEAP_FLAG_NONE,
+				&dsv_texture.desc,
+				D3D12_RESOURCE_STATE_DEPTH_WRITE,
+				get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
+				IID_PPV_ARGS(&dsv_texture.ptr)
+			));
 					
-				// Create/Update descriptor in dsv_heap
+			// Create/Update descriptor in dsv_heap
+			{
+				D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
 				{
-					D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
-					{
-						.Format 						=	DXGI_FORMAT_D32_FLOAT, // Sync This!
-						.ViewDimension 			= D3D12_DSV_DIMENSION_TEXTURE2D,
-						.Flags 							= D3D12_DSV_FLAG_NONE,
-						.Texture2D {.MipSlice = 0}
-					};
-					device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
-					                               dsv_heap->base.h_cpu);
-				}
+					.Format 						=	DXGI_FORMAT_D32_FLOAT, // Sync This!
+					.ViewDimension 			= D3D12_DSV_DIMENSION_TEXTURE2D,
+					.Flags 							= D3D12_DSV_FLAG_NONE,
+					.Texture2D {.MipSlice = 0}
+				};
+				device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
+																			dsv_heap->base.h_cpu);
 			}
 		}
 	}
 			
 	// D3D12 render
-	if (width && height)
 	{
 		auto cmd_alloc = ctx->cmd_allocators[frame_index];
 		auto backbuffer = rtv_texture[frame_index];

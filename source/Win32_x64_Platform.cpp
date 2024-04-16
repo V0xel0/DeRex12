@@ -111,11 +111,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		game_window.is_closed = Win32::g_is_running ? false : true;
 		game_window.time_ms = Win32::get_elapsed_ms_here(clock, ticks_loop_start);
 		
-		// Call application
-		Data_To_RHI* rhi_data = app_code.update_func(&game_memory, &game_window, new_inputs);
-		// Call RHI
-		rhi_run(rhi_data, &game_window);
-		
+		if (Win32::g_is_running)
+		{
+			// Call application
+			Data_To_RHI* rhi_data = app_code.update_func(&game_memory, &game_window, new_inputs);
+			// Call RHI
+			rhi_run(rhi_data, &game_window);
+		}
+
 		f64 frame_time_ms = Win32::get_elapsed_ms_here(clock, tick_start);
 		swap(old_inputs, new_inputs);
 		
