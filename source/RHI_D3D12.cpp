@@ -298,19 +298,8 @@ namespace DX
 			temp_swapchain->Release();
 		}
 		
-		// Create RTV heap
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC rtv_desc
-			{
-				.Type						= D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-				.NumDescriptors	= g_count_backbuffers,
-				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-				.NodeMask				= 0
-			};
-			THR(g_state.device->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&g_state.rtv_heap)));
-			g_state.rtv_descriptor_size = g_state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-		}
-		
+		g_state.rtv_heap = create_descriptor_heap(g_state.device, 3,
+																							D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 		g_state.dsv_heap = create_descriptor_heap(g_state.device, 1, 
 																							D3D12_DESCRIPTOR_HEAP_TYPE_DSV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 		
@@ -411,9 +400,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& height		= g_state.height;
 		
 	auto* swapchain 					= g_state.swapchain;
-	auto* rtv_heap 						= g_state.rtv_heap;
+	auto* rtv_heap 						= &g_state.rtv_heap;
 	auto* rtv_texture 				= g_state.rtv_texture;
-	auto& rtv_descriptor_size	= g_state.rtv_descriptor_size;
 	auto* dsv_heap 						= &g_state.dsv_heap;
 	auto& dsv_texture 				= g_state.dsv_texture;
 		
@@ -462,12 +450,12 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			frame_index = swapchain->GetCurrentBackBufferIndex();
 			
 			// Create/Update RTV textures
-			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu);
 			for (u32 i = 0; i < g_count_backbuffers; i++)
 			{
 				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
 				device->CreateRenderTargetView(rtv_texture[i], nullptr, rtv_handle);
-				rtv_handle.Offset(1, rtv_descriptor_size);
+				rtv_handle.Offset(1, rtv_heap->descriptor_size);
 			}
 				
 			// Create/Update DSV, depth texture
@@ -518,8 +506,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			                                                                                D3D12_RESOURCE_STATE_PRESENT,
 			                                                                                D3D12_RESOURCE_STATE_RENDER_TARGET)));
 			lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
-			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
-			                                         frame_index, rtv_descriptor_size);
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu,
+			                                         frame_index, rtv_heap->descriptor_size);
 			CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->base.h_cpu);
 				
 			ctx->cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);

@@ -1,8 +1,5 @@
 #pragma once
 
-// Header represent functions and types that need to be implemented by every RHI
-// Only external (non-namespaced) structures and functions needs to be implemented by RHI implementation
-
 #include "d3dx12.h"
 #ifdef _DEBUG
 #include <dxgidebug.h>
@@ -28,8 +25,8 @@ namespace DX
 {
 	struct Descriptor 
 	{
-    D3D12_CPU_DESCRIPTOR_HANDLE h_cpu;
-    D3D12_GPU_DESCRIPTOR_HANDLE h_gpu;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE h_cpu;
+    CD3DX12_GPU_DESCRIPTOR_HANDLE h_gpu;
 	};
 	
 	struct Fence
@@ -54,6 +51,7 @@ namespace DX
 		u32 max_size;
 		u32 descriptor_size;
 	};
+	
 } // namespace DX
 
 // external structures
@@ -88,8 +86,7 @@ struct RHI_State
 	
 	IDXGISwapChain4* swapchain;
 	ID3D12Resource* rtv_texture[g_count_backbuffers]{};
-	ID3D12DescriptorHeap* rtv_heap;
-	u32 rtv_descriptor_size;
+	DX::Descriptor_Heap rtv_heap;
 	
 	GPU_Resource dsv_texture;
 	DX::Descriptor_Heap dsv_heap;
