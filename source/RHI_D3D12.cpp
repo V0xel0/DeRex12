@@ -311,19 +311,8 @@ namespace DX
 			g_state.rtv_descriptor_size = g_state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
 		
-		// Create DSV heap
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC dsv_desc
-			{
-				.Type						= D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-				.NumDescriptors	= 1,
-				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-				.NodeMask				= 0
-			};
-			THR(g_state.device->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&g_state.dsv_heap)));
-		}
-		
-
+		g_state.dsv_heap = create_descriptor_heap(g_state.device, 1, 
+																							D3D12_DESCRIPTOR_HEAP_TYPE_DSV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 		
 		// Create heaps
 		{
@@ -425,7 +414,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto* rtv_heap 						= g_state.rtv_heap;
 	auto* rtv_texture 				= g_state.rtv_texture;
 	auto& rtv_descriptor_size	= g_state.rtv_descriptor_size;
-	auto* dsv_heap 						= g_state.dsv_heap;
+	auto* dsv_heap 						= &g_state.dsv_heap;
 	auto& dsv_texture 				= g_state.dsv_texture;
 		
 	auto& fence_values 	= g_state.fence_values;
@@ -485,7 +474,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			{
 				dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
 				          (DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-
+				dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+				
 				THR(device->CreateCommittedResource(
 					get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 					D3D12_HEAP_FLAG_NONE,
@@ -494,9 +484,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 					get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
 					IID_PPV_ARGS(&dsv_texture.ptr)
 				));
-				dsv_heap->SetName(L"Depth/Stencil Resource Heap");
 					
-				// Create/Update descriptor/view
+				// Create/Update descriptor in dsv_heap
 				{
 					D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc 
 					{
@@ -506,7 +495,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 						.Texture2D {.MipSlice = 0}
 					};
 					device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
-					                               dsv_heap->GetCPUDescriptorHandleForHeapStart());
+					                               dsv_heap->base.h_cpu);
 				}
 			}
 		}
@@ -531,7 +520,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			lib::Vec4 color { 0.42f, 0.14f, 0.3f, 1.0f };
 			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart(),
 			                                         frame_index, rtv_descriptor_size);
-			CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->GetCPUDescriptorHandleForHeapStart());
+			CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap->base.h_cpu);
 				
 			ctx->cmd_list->ClearRenderTargetView(rtv_handle, color.e, 0, nullptr);
 			ctx->cmd_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);

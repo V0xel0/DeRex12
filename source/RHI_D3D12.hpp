@@ -92,7 +92,7 @@ struct RHI_State
 	u32 rtv_descriptor_size;
 	
 	GPU_Resource dsv_texture;
-	ID3D12DescriptorHeap* dsv_heap;
+	DX::Descriptor_Heap dsv_heap;
 	
 	DX::Memory_Heap upload_heaps[g_count_backbuffers];
 	
