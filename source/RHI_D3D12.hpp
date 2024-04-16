@@ -61,12 +61,6 @@ struct Pipeline
 	ID3D12RootSignature* root_signature;
 };
 
-struct Device
-{
-	ID3D12Device2* ptr;
-	ID3D12DebugDevice2* d_ptr;
-};
-
 struct Context
 {
 	ID3D12CommandQueue* queue;
@@ -79,7 +73,8 @@ struct Context
 struct RHI_State
 {
 	// Logical State
-	Device device;
+	ID3D12Device2* device;
+	ID3D12DebugDevice2* d_dev;
 	Context ctx_direct;
 	
 	IDXGISwapChain4* swapchain;
@@ -110,10 +105,9 @@ namespace DX
 {
 	template <typename T>
 	[[nodiscard]]
-	GPU_Resource upload_static_data(Device* dev, Context* ctx, Array_View<T>data_cpu)
+	GPU_Resource upload_static_data(ID3D12Device2* device, Context* ctx, Array_View<T>data_cpu)
 	{
 		auto cmd_list = ctx->cmd_list;
-		auto device = dev->ptr;
 		GPU_Resource out{};
 		
 		ID3D12Resource* vb_staging = nullptr;

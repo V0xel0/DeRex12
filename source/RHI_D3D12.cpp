@@ -136,9 +136,8 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal Memory_Heap create_memory_heap(Device* dev, u64 max_bytes, D3D12_HEAP_TYPE type)
+	internal Memory_Heap create_memory_heap(ID3D12Device2* device, u64 max_bytes, D3D12_HEAP_TYPE type)
 	{
-		auto* device = dev->ptr;
 		Memory_Heap out{};
 		
 		THR(device->CreateCommittedResource(get_cptr<D3D12_HEAP_PROPERTIES>({ .Type = type }),
@@ -232,9 +231,9 @@ namespace DX
 		}
 			
 		// Create Device
-		THR(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&g_state.device.ptr)));
+		THR(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&g_state.device)));
 		#ifdef _DEBUG
-		THR(g_state.device.ptr->QueryInterface(&g_state.device.d_ptr));
+		THR(g_state.device->QueryInterface(&g_state.d_dev));
 		#endif
 			
 		// Create Command Queue
@@ -246,7 +245,7 @@ namespace DX
 				.Flags		= D3D12_COMMAND_QUEUE_FLAG_NONE, 
 				.NodeMask	= 0 
 			};
-			THR(g_state.device.ptr->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&ctx->queue)));
+			THR(g_state.device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&ctx->queue)));
 		}
 		
 		// Create Swap chain
@@ -283,8 +282,8 @@ namespace DX
 				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 				.NodeMask				= 0
 			};
-			THR(g_state.device.ptr->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&g_state.rtv_heap)));
-			g_state.rtv_descriptor_size = g_state.device.ptr->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+			THR(g_state.device->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&g_state.rtv_heap)));
+			g_state.rtv_descriptor_size = g_state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
 		
 		// Create DSV heap
@@ -296,32 +295,32 @@ namespace DX
 				.Flags					= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 				.NodeMask				= 0
 			};
-			THR(g_state.device.ptr->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&g_state.dsv_heap)));
+			THR(g_state.device->CreateDescriptorHeap(&dsv_desc, IID_PPV_ARGS(&g_state.dsv_heap)));
 		}
 		
 		// Create heaps
 		{
 			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
 			{
-				g_state.upload_heaps[frame_i] = create_memory_heap(&g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
+				g_state.upload_heaps[frame_i] = create_memory_heap(g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
 			}
 		}
 		
 		// Create fence
-		THR(g_state.device.ptr->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
+		THR(g_state.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
 		ctx->fence.fence_event = CreateEvent(0, false, false, 0);
 		AlwaysAssert(ctx->fence.fence_event && "Failed creation of fence event");
 		
 		// Create Command Allocators
 		for (u32 i = 0; i < g_count_backbuffers; i++)
 		{
-			THR(g_state.device.ptr->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
+			THR(g_state.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
 			                                   IID_PPV_ARGS(&ctx->cmd_allocators[i])));
 			THR(ctx->cmd_allocators[i]->Reset());
 		}
 		
 		// Create Initial Command List
-		THR(g_state.device.ptr->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+		THR(g_state.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
 		                              ctx->cmd_allocators[g_state.frame_index], nullptr,
 		                              IID_PPV_ARGS(&ctx->cmd_list)));
 		THR(ctx->cmd_list->Close());
@@ -331,9 +330,8 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal Pipeline create_basic_pipeline(Device* dev, const wchar_t* vs_ps_path)
+	internal Pipeline create_basic_pipeline(ID3D12Device2* device, const wchar_t* vs_ps_path)
 	{
-		auto* device = dev->ptr;
 		Pipeline out{};
 		
 		// Define the vertex input layout.
@@ -391,7 +389,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	}
 	// TEMPORARY helper autos, wish to have Odin/Jai "using" feature
 	auto* ctx 		= &g_state.ctx_direct; // for now only direct context
-	auto* device 	= g_state.device.ptr;
+	auto* device 	= g_state.device;
 		
 	auto& width			= g_state.width;
 	auto& height		= g_state.height;
@@ -415,9 +413,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	// Static data upload
 	if(data_from_app->is_new_static)
 	{
-		vertices_static = upload_static_data(&g_state.device, ctx, data_from_app->st_verts);
-		indices_static 	= upload_static_data(&g_state.device, ctx, data_from_app->st_indices);
-		static_pso 			= create_basic_pipeline(&g_state.device, data_from_app->shader_path);
+		vertices_static = upload_static_data(device, ctx, data_from_app->st_verts);
+		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices);
+		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
 	}
 		
