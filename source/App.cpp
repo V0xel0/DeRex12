@@ -28,6 +28,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	auto* data_to_rhi = &app_state->data_for_rhi;
 	auto* camera 			= &app_state->camera;
 	app_state->data_for_rhi = {}; // zero every time
+	arena_reset(&app_state->arena_assets); // reset all previous frame
 	
 	if (!memory->is_initalized)
 	{

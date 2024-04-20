@@ -107,7 +107,14 @@ inline void arena_end_temp(Alloc_Arena *arena)
 inline void arena_reset(Alloc_Arena *arena)
 {
 	assert(arena);
-	memset(arena->base, 0, arena->max_size);
+	memset(arena->base, 0, arena->curr_offset);
+	arena->curr_offset = 0;
+	arena->prev_offset = 0;
+}
+
+inline void arena_reset_nz(Alloc_Arena *arena)
+{
+	assert(arena);
 	arena->curr_offset = 0;
 	arena->prev_offset = 0;
 }
@@ -165,7 +172,7 @@ inline void stack_pop(Alloc_Stack *stack)
 inline void stack_reset(Alloc_Stack *stack)
 {
 	assert(stack);
-	memset(stack->base, 0, stack->max_size);
+	memset(stack->base, 0, stack->curr_offset);
 	stack->curr_offset = 0;
 	stack->last_header_offset = 0;
 }

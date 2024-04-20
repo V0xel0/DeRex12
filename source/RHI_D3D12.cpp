@@ -168,7 +168,7 @@ namespace DX
 	
 	internal void reset_gpu_memory(Memory_Heap* heap)
 	{
-		arena_reset(&heap->heap_arena);
+		arena_reset_nz(&heap->heap_arena);
 	}
 	
 	[[nodiscard]]
