@@ -32,8 +32,8 @@ namespace DX
 	struct Fence
 	{
 		ID3D12Fence* ptr;
-		u64 fence_counter;
-		HANDLE fence_event;
+		u64 counter;
+		HANDLE event;
 	};
 	
 	struct Memory_Heap
@@ -47,8 +47,8 @@ namespace DX
 	{
 		ID3D12DescriptorHeap* heap;
 		Descriptor base;
-		u32 size;
-		u32 max_size;
+		u32 count;
+		u32 max_count;
 		u32 descriptor_size;
 	};
 	
@@ -92,6 +92,7 @@ struct RHI_State
 	DX::Descriptor_Heap dsv_heap;
 	
 	DX::Memory_Heap upload_heaps[g_count_backbuffers];
+	DX::Descriptor_Heap cbv_srv_uav_heap[g_count_backbuffers];
 	
 	u32 frame_index;
 	u64 fence_values[g_count_backbuffers];

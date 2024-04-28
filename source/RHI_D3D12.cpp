@@ -38,13 +38,14 @@ namespace DX
 {
 	internal constexpr u32 g_alloc_alignment = 256;
 	internal constexpr u64 g_upload_heap_max_size = MiB(20);
+	internal constexpr u64 g_max_count_cbv_srv_uav_descriptors = 128;
 	
 	internal RHI_State g_state{};
 		
 	[[nodiscard]]
 	internal u64 signal(Context* ctx)
 	{
-		u64 value_to_signal = ++ctx->fence.fence_counter;
+		u64 value_to_signal = ++ctx->fence.counter;
 		THR(ctx->queue->Signal(ctx->fence.ptr, value_to_signal));
 		return value_to_signal;
 	}
@@ -54,12 +55,11 @@ namespace DX
 		u64 completed_value = fence->ptr->GetCompletedValue();
 		if (completed_value < value_to_wait)
 		{
-			THR(fence->ptr->SetEventOnCompletion(value_to_wait, fence->fence_event));
-			WaitForSingleObject(fence->fence_event, INFINITE);
+			THR(fence->ptr->SetEventOnCompletion(value_to_wait, fence->event));
+			WaitForSingleObject(fence->event, INFINITE);
 		}
 	}
 
-	[[nodiscard]]
 	internal void wait_for_work(Context* ctx)
 	{
 		u64 value_to_signal = signal(ctx);
@@ -161,8 +161,10 @@ namespace DX
 	internal auto push_to_gpu_heap(Memory_Heap* heap, u64 size)
 	{
 		struct { u8* addr_cpu; D3D12_GPU_VIRTUAL_ADDRESS addr_gpu; }out;
+		
 		out.addr_cpu = (u8*)allocate(&heap->heap_arena, size, g_alloc_alignment);
 		out.addr_gpu = heap->gpu_base + heap->heap_arena.prev_offset; //prev offset was curr offset in cpu alloc
+		
 		return out;
 	}
 	
@@ -190,12 +192,32 @@ namespace DX
 		if (flags == D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)
 			out.base.h_gpu = out.heap->GetGPUDescriptorHandleForHeapStart();
 
-		out.max_size = count_descriptors;
+		out.max_count = count_descriptors;
 		out.descriptor_size = device->GetDescriptorHandleIncrementSize(type);
 			
 		return out;
 	}
 	
+	//TODO: For now, arena based allocation, maybe slot allocator would be better fit? (same size of descriptors)
+	[[nodiscard]]
+	internal Descriptor push_descriptors(Descriptor_Heap* heap, u32 count = 1)
+	{
+		Descriptor out{};
+		
+		out.h_cpu = { .ptr = heap->base.h_cpu.ptr + heap->descriptor_size * heap->count };
+		if(heap->base.h_gpu.ptr	!= 0)
+			out.h_gpu = { .ptr = heap->base.h_gpu.ptr + heap->descriptor_size * heap->count };
+		heap->count = heap->count + count;
+		
+		return out;
+	}
+	
+	internal void reset_descriptor_heap(Descriptor_Heap* heap)
+	{
+		heap->descriptor_size = 0;
+	}
+	
+	//TODO: "state" ptr is not being used with global state approach
 	internal void rhi_init(RHI_State* state, void* win_handle, u32 client_width, u32 client_height)
 	{
 		auto* ctx = &g_state.ctx_direct;
@@ -298,7 +320,7 @@ namespace DX
 			temp_swapchain->Release();
 		}
 		
-		g_state.rtv_heap = create_descriptor_heap(g_state.device, 3,
+		g_state.rtv_heap = create_descriptor_heap(g_state.device, g_count_backbuffers,
 																							D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
 		g_state.dsv_heap = create_descriptor_heap(g_state.device, 1, 
 																							D3D12_DESCRIPTOR_HEAP_TYPE_DSV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
@@ -308,6 +330,9 @@ namespace DX
 			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
 			{
 				g_state.upload_heaps[frame_i] = create_memory_heap(g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
+				g_state.cbv_srv_uav_heap[frame_i] = create_descriptor_heap(g_state.device, g_max_count_cbv_srv_uav_descriptors,
+																																	 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
+																																	 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
 			}
 		}
 		
@@ -460,16 +485,16 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				
 		// Create/Update DSV, depth texture
 		{
+			RELEASE_SAFE(dsv_texture.ptr);
 			dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
 								(DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 			dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-			RELEASE_SAFE(dsv_texture.ptr);
 				
 			THR(device->CreateCommittedResource(
 				get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 				D3D12_HEAP_FLAG_NONE,
 				&dsv_texture.desc,
-				D3D12_RESOURCE_STATE_DEPTH_WRITE,
+				dsv_texture.state,
 				get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
 				IID_PPV_ARGS(&dsv_texture.ptr)
 			));
