@@ -5,6 +5,17 @@
 using namespace lib;
 #endif
 
+struct Draw_Ids
+{
+	u32 pos_id;
+};
+
+struct Vertex
+{
+	Vec4 position;
+	Vec4 color;
+};
+
 struct Constant_Data_Frame
 {
 	Vec4 light_pos;

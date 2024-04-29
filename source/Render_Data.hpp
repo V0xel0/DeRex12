@@ -13,12 +13,6 @@ struct Game_Window
 	b32 is_closed;
 };
 
-struct Vertex
-{
-	lib::Vec4 position;
-	lib::Vec4 color;
-};
-
 struct Data_To_RHI
 {
 	Array_View<Vertex> st_verts;

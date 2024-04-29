@@ -378,13 +378,6 @@ namespace DX
 	{
 		Pipeline out{};
 		
-		// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC ia_layout[] =
-		{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-		};
-		
 		// Compile shaders
 		auto result_ps = compile_shader_default(vs_ps_path, L"simplePS", L"PSMain", L"ps_6_6");
 		auto result_vs = compile_shader_default(vs_ps_path, L"simpleVS", L"VSMain", L"vs_6_6");
@@ -400,7 +393,6 @@ namespace DX
 		// Create default PSO
 		{
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc{};
-			pso_desc.InputLayout = { ia_layout, _countof(ia_layout) };
 			pso_desc.pRootSignature = out.root_signature;
 			pso_desc.VS = { vertex_shader->GetBufferPointer(), vertex_shader->GetBufferSize() };
 			pso_desc.PS = { pixel_shader->GetBufferPointer(),  pixel_shader->GetBufferSize() };
@@ -454,8 +446,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	// Static data upload
 	if (data_from_app->is_new_static)
 	{
-		vertices_static = upload_static_data(device, ctx, data_from_app->st_verts);
-		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices);
+		vertices_static = upload_static_data(device, ctx, data_from_app->st_verts, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
 	}
@@ -538,6 +530,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		auto cmd_alloc = ctx->cmd_allocators[frame_index];
 		auto backbuffer = rtv_texture[frame_index];
 		auto* upload_heap = &g_state.upload_heaps[frame_index];
+		auto* cbv_srv_uav_heap = &g_state.cbv_srv_uav_heap[frame_index];
 			
 		THR(cmd_alloc->Reset());
 		// Reset current command list taken from current command allocator
@@ -576,6 +569,22 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			// Copy to gpu upload heap
 			*draw_consts = data_from_app->cb_draw;
 		}
+		
+		// Push SRVs
+		{
+			Descriptor srv_h = push_descriptors(cbv_srv_uav_heap);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+			srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
+			srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+			srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srv_desc.Buffer = {
+												 .FirstElement = 0,
+												 .NumElements = 8, // just for now
+												 .StructureByteStride = sizeof(Vertex),
+												 .Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE
+												};
+			device->CreateShaderResourceView(vertices_static.ptr, &srv_desc, srv_h.h_cpu);
+		}
 			
 		// Populate command list
 		{
@@ -583,21 +592,16 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			ctx->cmd_list->RSSetViewports(1, get_cptr(CD3DX12_VIEWPORT(0.0f, 0.0f, (f32)width, (f32)height)));
 			ctx->cmd_list->RSSetScissorRects(1, get_cptr(CD3DX12_RECT(0, 0, (u32)width, (u32)height)));
 			ctx->cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			ctx->cmd_list->SetDescriptorHeaps(1, &cbv_srv_uav_heap->heap);
 				
 			// Drawing static data
 			{
 				//command_list->SetPipelineState(pso);
 				ctx->cmd_list->SetGraphicsRootSignature(static_pso.root_signature);
-				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_frame);
-				ctx->cmd_list->SetGraphicsRootConstantBufferView(0, cbv_gpu_addr_draw);
+				ctx->cmd_list->SetGraphicsRootConstantBufferView(2, cbv_gpu_addr_frame);
+				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
+				ctx->cmd_list->SetGraphicsRoot32BitConstant(0, 0, 0); //TODO: test only, single srv for vertices 
 				
-				D3D12_VERTEX_BUFFER_VIEW vb_view_static 
-				{ 
-					.BufferLocation = vertices_static.ptr->GetGPUVirtualAddress(),
-					.SizeInBytes = (UINT)vertices_static.desc.Width,
-					.StrideInBytes = sizeof(Vertex)
-				};
-				ctx->cmd_list->IASetVertexBuffers(0, 1, &vb_view_static);
 				
 				D3D12_INDEX_BUFFER_VIEW ib_view_static
 				{
@@ -608,7 +612,6 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				
 				ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
 				ctx->cmd_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
-				//ctx->cmd_list->DrawIndexedInstanced(6, 1, 0, 4, 0);
 			}
 		}
 			
@@ -634,8 +637,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				
 			// Wait for fence value from frame (n-1) - not waiting on current frame
 			sync_with_fence(&ctx->fence, fence_values[frame_index]);
-			// Upload heap from frame (n-1) is safe to reset cause work from that frame has finished
+			// Heaps from frame (n-1) are safe to reset cause work from that frame has finished
 			reset_gpu_memory(&g_state.upload_heaps[frame_index]);
+			reset_descriptor_heap(cbv_srv_uav_heap);
 		}
 	}
 }

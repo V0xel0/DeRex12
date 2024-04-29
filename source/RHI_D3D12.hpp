@@ -112,7 +112,7 @@ namespace DX
 {
 	template <typename T>
 	[[nodiscard]]
-	GPU_Resource upload_static_data(ID3D12Device2* device, Context* ctx, Array_View<T>data_cpu)
+	GPU_Resource upload_static_data(ID3D12Device2* device, Context* ctx, Array_View<T>data_cpu, D3D12_RESOURCE_STATES end_state)
 	{
 		auto cmd_list = ctx->cmd_list;
 		GPU_Resource out{};
@@ -135,7 +135,7 @@ namespace DX
 		vb_staging->Unmap(0, nullptr);
 	
 		out.desc = desc;
-		out.state = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		out.state = end_state;
 		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 																				D3D12_HEAP_FLAG_NONE,
 																				&desc,
