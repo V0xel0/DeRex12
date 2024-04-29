@@ -202,6 +202,7 @@ namespace DX
 	[[nodiscard]]
 	internal Descriptor push_descriptors(Descriptor_Heap* heap, u32 count = 1)
 	{
+		assert(heap->max_count >= heap->count + count && "no space!");
 		Descriptor out{};
 		
 		out.h_cpu = { .ptr = heap->base.h_cpu.ptr + heap->descriptor_size * heap->count };
@@ -212,9 +213,22 @@ namespace DX
 		return out;
 	}
 	
+	[[nodiscard]]
+	internal Descriptor get_descriptor(Descriptor_Heap* heap, u32 i)
+	{
+		assert(i < heap->count && i >= 0); 
+		Descriptor out{};
+			
+		out.h_cpu = { .ptr = heap->base.h_cpu.ptr + heap->descriptor_size * heap->count };
+		if(heap->base.h_gpu.ptr	!= 0)
+			out.h_gpu = { .ptr = heap->base.h_gpu.ptr + heap->descriptor_size * heap->count };
+			
+		return out;
+	}
+	
 	internal void reset_descriptor_heap(Descriptor_Heap* heap)
 	{
-		heap->descriptor_size = 0;
+		heap->count = 0;
 	}
 	
 	//TODO: "state" ptr is not being used with global state approach
@@ -338,8 +352,8 @@ namespace DX
 		
 		// Create fence
 		THR(g_state.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->fence.ptr)));
-		ctx->fence.fence_event = CreateEvent(0, false, false, 0);
-		AlwaysAssert(ctx->fence.fence_event && "Failed creation of fence event");
+		ctx->fence.event = CreateEvent(0, false, false, 0);
+		AlwaysAssert(ctx->fence.event && "Failed creation of fence event");
 		
 		// Create Command Allocators
 		for (u32 i = 0; i < g_count_backbuffers; i++)
@@ -426,7 +440,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		
 	auto* swapchain 	= g_state.swapchain;
 	auto* rtv_heap 		= &g_state.rtv_heap;
-	auto* rtv_texture	= g_state.rtv_texture;
+	auto rtv_texture	= g_state.rtv_texture;
 	auto* dsv_heap 		= &g_state.dsv_heap;
 	auto& dsv_texture	= g_state.dsv_texture;
 		
@@ -454,38 +468,43 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			
 		wait_for_work(ctx);
 		
-		for (u32 i = 0; i < g_count_backbuffers; i++)
+		// Clean
 		{
-			RELEASE_SAFE(rtv_texture[i]);
-			rtv_texture[i] = nullptr;
-			fence_values[i] = fence_values[frame_index];
+			reset_descriptor_heap(rtv_heap);
+			reset_descriptor_heap(dsv_heap);
+			for (u32 i = 0; i < g_count_backbuffers; i++)
+			{
+				RELEASE_SAFE(rtv_texture[i]);
+			}
+			RELEASE_SAFE(dsv_texture.ptr);
 		}
 
 		// Resize swap chain
-		DXGI_SWAP_CHAIN_DESC swapchain_desc{};
-		THR(swapchain->GetDesc(&swapchain_desc));
-		THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
-																swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
+		{
+			DXGI_SWAP_CHAIN_DESC swapchain_desc{};
+			THR(swapchain->GetDesc(&swapchain_desc));
+			THR(swapchain->ResizeBuffers(g_count_backbuffers, width, height, 
+																	 swapchain_desc.BufferDesc.Format, swapchain_desc.Flags));
 			
-		frame_index = swapchain->GetCurrentBackBufferIndex();
+			frame_index = swapchain->GetCurrentBackBufferIndex();
+		}
 			
 		// Create/Update RTV textures
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->base.h_cpu);
-		D3D12_RENDER_TARGET_VIEW_DESC rtv_desc
 		{
-			.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, // Sync This!
-			.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D 
-		};
-		for (u32 i = 0; i < g_count_backbuffers; i++)
-		{
-			THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
-			device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, rtv_handle);
-			rtv_handle.Offset(1, rtv_heap->descriptor_size);
+			D3D12_RENDER_TARGET_VIEW_DESC rtv_desc
+			{
+				.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, // Sync This!
+				.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D 
+			};
+			for (u32 i = 0; i < g_count_backbuffers; i++)
+			{
+				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
+				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, push_descriptors(rtv_heap).h_cpu);
+			}
 		}
 				
 		// Create/Update DSV, depth texture
 		{
-			RELEASE_SAFE(dsv_texture.ptr);
 			dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
 								(DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 			dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
@@ -509,7 +528,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 					.Texture2D {.MipSlice = 0}
 				};
 				device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
-																			dsv_heap->base.h_cpu);
+																			 push_descriptors(dsv_heap).h_cpu);
 			}
 		}
 	}

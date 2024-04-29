@@ -235,28 +235,27 @@ inline Alloc_Pool pool_from_allocator(auto* allocator, const u64 max_size_bytes,
 }
 
 //? The allocation must fit in a single block size!
-//?(note) Already tried to have allocations that spans through multiple blocks - its dumb for this type of allocator!(freeing)
 [[nodiscard]]
-inline void *allocate(Alloc_Pool *pool, const u64 size_bytes, const u64 alignment = alignof(u64))
+	inline void *allocate(Alloc_Pool *pool, const u64 alignment = alignof(u64))
 {
-	assert(size_bytes <= pool->block_size && "Too much elements for a single block!");
 	assert(alignment <= pool->block_size && "Alignment is bigger than block size!");
 
 	Pool_Free_Node *head_node = get_node(pool, pool->head_block);
 	pool->head_block = head_node->next;
 	
-	return memset(head_node, 0, pool->block_size);
+	return head_node;
 }
+
 //? Adding to a pool list
 inline void free_block(Alloc_Pool *pool, void *ptr)
 {
 	if (ptr == nullptr)
 		return;
 	
-	byte *end = pool->base + pool->max_size;
-	assert(((byte *)ptr < end ) && ((byte *)ptr >= pool->base) && "Provided memory addres is out of bounds!");
+	assert(((byte *)ptr < pool->base + pool->max_size ) && ((byte *)ptr >= pool->base) && "Provided memory addres is out of bounds!");
 	assert((u64)ptr % pool->block_size == 0 && "The address is offsetted - is not a block beginning!");
 	
+	memset(ptr, 0, pool->block_size);
 	Pool_Free_Node *head_node = (Pool_Free_Node *)ptr;
 	head_node->next = pool->head_block;
 	pool->head_block = (u64)(head_node - (Pool_Free_Node *)pool->base);
