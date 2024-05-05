@@ -13,8 +13,6 @@
 * 12) upload_static_data has to be changed to be a data thats const per "level" and needs upload 
 * 			to default heap. In data sent from app to rhi then we would have 2 streams of data depending
 * 			on frequency -> or streams of render passses later
-* 13) Might reduce quering in sync_with_fence for GetCompletedValue by quering in if only and compare
-* 			with fence_counter instead
 * 14) RHI_State seperation for logical & data, also caching system for it
 * 15) create_basic_pipeline has to be split from shader creation and maybe generalized to any pipeline 
 * */
@@ -24,6 +22,8 @@
 #include "GameAsserts.hpp"
 #include "Views.hpp"
 #include "Math.hpp"
+
+#define NOMINMAX
 
 #include "RHI_D3D12.hpp"
 #include <dxcapi.h>       
@@ -136,7 +136,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal Memory_Heap create_memory_heap(ID3D12Device2* device, u64 max_bytes, D3D12_HEAP_TYPE type)
+	internal Memory_Heap create_upload_heap(ID3D12Device2* device, u64 max_bytes, D3D12_HEAP_TYPE type)
 	{
 		Memory_Heap out{};
 		
@@ -158,7 +158,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal auto push_to_gpu_heap(Memory_Heap* heap, u64 size)
+	internal auto allocate_to_upload_heap(Memory_Heap* heap, u64 size)
 	{
 		struct { u8* addr_cpu; D3D12_GPU_VIRTUAL_ADDRESS addr_gpu; }out;
 		
@@ -168,7 +168,15 @@ namespace DX
 		return out;
 	}
 	
-	internal void reset_gpu_memory(Memory_Heap* heap)
+	D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Memory_Heap* heap, void* src, u32 size)
+	{
+		const auto [cpu_addr, gpu_addr] = allocate_to_upload_heap(heap, sizeof(Constant_Data_Frame));
+		memcpy(cpu_addr, src, size);
+			
+		return gpu_addr;
+	}
+	
+	internal void reset_upload_heap(Memory_Heap* heap)
 	{
 		arena_reset_nz(&heap->heap_arena);
 	}
@@ -200,7 +208,7 @@ namespace DX
 	
 	//TODO: For now, arena based allocation, maybe slot allocator would be better fit? (same size of descriptors)
 	[[nodiscard]]
-	internal Descriptor push_descriptors(Descriptor_Heap* heap, u32 count = 1)
+	internal Descriptor allocate_descriptors(Descriptor_Heap* heap, u32 count = 1)
 	{
 		assert(heap->max_count >= heap->count + count && "no space!");
 		Descriptor out{};
@@ -343,7 +351,7 @@ namespace DX
 		{
 			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
 			{
-				g_state.upload_heaps[frame_i] = create_memory_heap(g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
+				g_state.upload_heaps[frame_i] = create_upload_heap(g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
 				g_state.cbv_srv_uav_heap[frame_i] = create_descriptor_heap(g_state.device, g_max_count_cbv_srv_uav_descriptors,
 																																	 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
 																																	 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
@@ -413,6 +421,7 @@ namespace DX
 		return out;
 	}
 	
+
 } // namespace DX
 
 extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
@@ -491,7 +500,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			for (u32 i = 0; i < g_count_backbuffers; i++)
 			{
 				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
-				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, push_descriptors(rtv_heap).h_cpu);
+				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, allocate_descriptors(rtv_heap).h_cpu);
 			}
 		}
 				
@@ -520,7 +529,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 					.Texture2D {.MipSlice = 0}
 				};
 				device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
-																			 push_descriptors(dsv_heap).h_cpu);
+																			 allocate_descriptors(dsv_heap).h_cpu);
 			}
 		}
 	}
@@ -550,29 +559,12 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_heap->base.h_cpu);
 		}
 			
-		// Push per frame constants
-		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame{};
-		{
-			const auto [cpu_addr, gpu_addr] = push_to_gpu_heap(upload_heap, sizeof(Constant_Data_Frame));
-			cbv_gpu_addr_frame = gpu_addr;
-			Constant_Data_Frame* frame_consts = (Constant_Data_Frame*)cpu_addr;
-			// Copy to gpu upload heap
-			*frame_consts = data_from_app->cb_frame;
-		}
-			
-		// Push per draw constants
-		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw{};
-		{
-			const auto [cpu_addr, gpu_addr] = push_to_gpu_heap(upload_heap, sizeof(Constant_Data_Draw));
-			cbv_gpu_addr_draw = gpu_addr;
-			Constant_Data_Draw* draw_consts = (Constant_Data_Draw*)cpu_addr;
-			// Copy to gpu upload heap
-			*draw_consts = data_from_app->cb_draw;
-		}
+		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, &data_from_app->cb_frame, sizeof(data_from_app->cb_frame));
+		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, &data_from_app->cb_draw, sizeof(data_from_app->cb_draw));
 		
 		// Push SRVs
 		{
-			Descriptor srv_h = push_descriptors(cbv_srv_uav_heap);
+			Descriptor srv_h = allocate_descriptors(cbv_srv_uav_heap);
 			D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
 			srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
 			srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
@@ -601,7 +593,6 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(2, cbv_gpu_addr_frame);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
 				ctx->cmd_list->SetGraphicsRoot32BitConstant(0, 0, 0); //TODO: test only, single srv for vertices 
-				
 				
 				D3D12_INDEX_BUFFER_VIEW ib_view_static
 				{
@@ -638,7 +629,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			// Wait for fence value from frame (n-1) - not waiting on current frame
 			sync_with_fence(&ctx->fence, fence_values[frame_index]);
 			// Heaps from frame (n-1) are safe to reset cause work from that frame has finished
-			reset_gpu_memory(&g_state.upload_heaps[frame_index]);
+			reset_upload_heap(&g_state.upload_heaps[frame_index]);
 			reset_descriptor_heap(cbv_srv_uav_heap);
 		}
 	}
