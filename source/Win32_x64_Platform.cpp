@@ -104,10 +104,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		
 		// Window size change check
 		auto&& [new_width, new_height] = Win32::get_window_client_dims(win_handle);
-		
-		// Update application
-		game_window.width = new_width;
-		game_window.height = new_height;
+		 
+		// Update application data
+		if(!IsIconic(win_handle))
+		{
+			game_window.width = new_width;
+			game_window.height = new_height;
+		}
 		game_window.is_closed = Win32::g_is_running ? false : true;
 		game_window.time_ms = Win32::get_elapsed_ms_here(clock, ticks_loop_start);
 		

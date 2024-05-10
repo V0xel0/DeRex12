@@ -95,7 +95,7 @@ struct RHI_State
 	DX::Descriptor_Heap cbv_srv_uav_heap[g_count_backbuffers];
 	
 	u32 frame_index;
-	u64 fence_values[g_count_backbuffers];
+	u64 fence_signals[g_count_backbuffers];
 	
 	b32 is_initalized;
 	b32 vsync;

@@ -7,7 +7,6 @@
 
 //TODO: Lerp, ceil, floor, round, trunc with vectors
 //TODO: quaternions (angle and other), quaternion to rotation mat4 (check insomniac paper), and mat4 to quaternion
-//TODO: Euler angles
 //TODO: Exponent for integers and floats
 //TODO: ? To concept or not to concept ?
 //TODO: Consider inlining instead of calling dots, crosses etc.

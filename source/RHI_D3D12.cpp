@@ -445,7 +445,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto* dsv_heap 		= &g_state.dsv_heap;
 	auto& dsv_texture	= g_state.dsv_texture;
 		
-	auto& fence_values 	= g_state.fence_values;
+	auto& fence_signals = g_state.fence_signals;
 	auto& frame_index 	= g_state.frame_index;
 	
 	auto& vertices_static = g_state.vertices_static;
@@ -460,7 +460,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
 	}
-		
+	
 	// RTV & DSV check for re/creation
 	if (window->width != width || window->height != height || !rtv_texture[0])
 	{
@@ -621,13 +621,13 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			THR(swapchain->Present(1, 0));
 				
 			// Signal the end of direct context work for this frame and store its value for later synchronization
-			fence_values[frame_index] = signal(ctx);
+			fence_signals[frame_index] = signal(ctx);
 				
 			// Get next backbuffer index - updated on swapchain by Present()
 			frame_index = swapchain->GetCurrentBackBufferIndex();
 				
 			// Wait for fence value from frame (n-1) - not waiting on current frame
-			sync_with_fence(&ctx->fence, fence_values[frame_index]);
+			sync_with_fence(&ctx->fence, fence_signals[frame_index]);
 			// Heaps from frame (n-1) are safe to reset cause work from that frame has finished
 			reset_upload_heap(&g_state.upload_heaps[frame_index]);
 			reset_descriptor_heap(cbv_srv_uav_heap);
