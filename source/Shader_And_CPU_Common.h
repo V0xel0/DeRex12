@@ -8,6 +8,7 @@ using namespace lib;
 struct Draw_Ids
 {
 	u32 pos_id;
+	u32 ind_id;
 };
 
 struct Vertex

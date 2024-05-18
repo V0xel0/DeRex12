@@ -16,7 +16,7 @@ struct Game_Window
 struct Data_To_RHI
 {
 	Array_View<Vertex> st_verts;
-	Array_View<u16> st_indices;
+	Array_View<u32> st_indices;
 	const wchar_t* shader_path;
 	b32 is_new_static;
 	

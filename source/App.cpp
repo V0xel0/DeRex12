@@ -49,7 +49,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 									Vertex{ { 1.f, 1.f, 1.f, 1.0f},		{1.f, 1.f, 1.f, 1.0f} }, // 6
 									Vertex{ { 1.f, -1.f, 1.f, 1.0f},	{1.f, 0.f, 1.f, 1.0f} });  // 7
 		
-		Array_View<u16>indices_data{};
+		Array_View<u32>indices_data{};
 		indices_data.init(&app_state->arena_assets, 		
 		                  0, 1, 2, 0, 2, 3,
 		                  4, 6, 5, 4, 7, 6,

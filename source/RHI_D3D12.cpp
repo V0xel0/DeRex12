@@ -15,6 +15,7 @@
 * 			on frequency -> or streams of render passses later
 * 14) RHI_State seperation for logical & data, also caching system for it
 * 15) create_basic_pipeline has to be split from shader creation and maybe generalized to any pipeline 
+* 16) maybe keep descriptors tied to DescriptorHeap (by additional id)?
 * */
 
 #include "Utils.hpp"
@@ -208,15 +209,15 @@ namespace DX
 	
 	//TODO: For now, arena based allocation, maybe slot allocator would be better fit? (same size of descriptors)
 	[[nodiscard]]
-	internal Descriptor allocate_descriptors(Descriptor_Heap* heap, u32 count = 1)
+	internal Descriptor allocate_descriptor(Descriptor_Heap* heap)
 	{
-		assert(heap->max_count >= heap->count + count && "no space!");
+		assert(heap->max_count >= heap->count + 1 && "no space!");
 		Descriptor out{};
 		
 		out.h_cpu = { .ptr = heap->base.h_cpu.ptr + heap->descriptor_size * heap->count };
 		if(heap->base.h_gpu.ptr	!= 0)
 			out.h_gpu = { .ptr = heap->base.h_gpu.ptr + heap->descriptor_size * heap->count };
-		heap->count = heap->count + count;
+		heap->count += 1;
 		
 		return out;
 	}
@@ -232,6 +233,12 @@ namespace DX
 			out.h_gpu = { .ptr = heap->base.h_gpu.ptr + heap->descriptor_size * heap->count };
 			
 		return out;
+	}
+	
+	[[nodiscard]]
+	internal u32 get_descriptor_id(Descriptor_Heap* heap, Descriptor* descriptor)
+	{
+		return (u32)((descriptor->h_cpu.ptr - heap->base.h_cpu.ptr) / heap->descriptor_size);
 	}
 	
 	internal void reset_descriptor_heap(Descriptor_Heap* heap)
@@ -456,7 +463,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	if (data_from_app->is_new_static)
 	{
 		vertices_static = upload_static_data(device, ctx, data_from_app->st_verts, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
 	}
@@ -500,7 +507,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			for (u32 i = 0; i < g_count_backbuffers; i++)
 			{
 				THR(swapchain->GetBuffer(i, IID_PPV_ARGS(&rtv_texture[i])));
-				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, allocate_descriptors(rtv_heap).h_cpu);
+				device->CreateRenderTargetView(rtv_texture[i], &rtv_desc, allocate_descriptor(rtv_heap).h_cpu);
 			}
 		}
 				
@@ -529,7 +536,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 					.Texture2D {.MipSlice = 0}
 				};
 				device->CreateDepthStencilView(dsv_texture.ptr, &dsv_desc, 
-																			 allocate_descriptors(dsv_heap).h_cpu);
+																			 allocate_descriptor(dsv_heap).h_cpu);
 			}
 		}
 	}
@@ -562,20 +569,36 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, &data_from_app->cb_frame, sizeof(data_from_app->cb_frame));
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, &data_from_app->cb_draw, sizeof(data_from_app->cb_draw));
 		
-		// Push SRVs
+		// Push SRVs for static data
 		{
-			Descriptor srv_h = allocate_descriptors(cbv_srv_uav_heap);
-			D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-			srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
-			srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-			srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srv_desc.Buffer = {
-												 .FirstElement = 0,
-												 .NumElements = 8, // just for now
-												 .StructureByteStride = sizeof(Vertex),
-												 .Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE
-												};
-			device->CreateShaderResourceView(vertices_static.ptr, &srv_desc, srv_h.h_cpu);
+			// Vertices
+			{
+				Descriptor srv_h = allocate_descriptor(cbv_srv_uav_heap);
+				D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+				srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
+				srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+				srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				srv_desc.Buffer = {
+													.FirstElement = 0,
+													.NumElements = (u32)vertices_static.desc.Width / sizeof(Vertex),
+													.StructureByteStride = sizeof(Vertex),
+													.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE
+				};
+				device->CreateShaderResourceView(vertices_static.ptr, &srv_desc, srv_h.h_cpu);
+			}
+			
+			// Indices
+			{
+				Descriptor srv_h = allocate_descriptor(cbv_srv_uav_heap);
+				D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+				srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_R32_UINT; //SYNC THIS!
+				srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+				srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				srv_desc.Buffer = {
+													.NumElements = (u32)indices_static.desc.Width / sizeof(u32)
+				};
+				device->CreateShaderResourceView(indices_static.ptr, &srv_desc, srv_h.h_cpu);
+			}
 		}
 			
 		// Populate command list
@@ -592,17 +615,10 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				ctx->cmd_list->SetGraphicsRootSignature(static_pso.root_signature);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(2, cbv_gpu_addr_frame);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
-				ctx->cmd_list->SetGraphicsRoot32BitConstant(0, 0, 0); //TODO: test only, single srv for vertices 
+				ctx->cmd_list->SetGraphicsRoot32BitConstants(0, sizeof(Draw_Ids) / sizeof(u32),
+																										 get_cptr(Draw_Ids{0, 1}), 0); //TODO: indexes from descriptor
 				
-				D3D12_INDEX_BUFFER_VIEW ib_view_static
-				{
-					.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
-					.SizeInBytes = (UINT)indices_static.desc.Width,
-					.Format = DXGI_FORMAT_R16_UINT
-				};
-				
-				ctx->cmd_list->IASetIndexBuffer(&ib_view_static);
-				ctx->cmd_list->DrawIndexedInstanced(36, 1, 0, 0, 0);
+				ctx->cmd_list->DrawInstanced((u32)indices_static.desc.Width / sizeof(u32), 1, 0, 0);
 			}
 		}
 			
