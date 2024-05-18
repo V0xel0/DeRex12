@@ -29,6 +29,12 @@ namespace DX
     CD3DX12_GPU_DESCRIPTOR_HANDLE h_gpu;
 	};
 	
+	struct Resource_View
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC desc;
+		u32 id;
+	};
+	
 	struct Fence
 	{
 		ID3D12Fence* ptr;
@@ -107,48 +113,3 @@ struct RHI_State
 	GPU_Resource indices_static;
 	Pipeline static_pso;
 };
-
-namespace DX
-{
-	template <typename T>
-	[[nodiscard]]
-	GPU_Resource upload_static_data(ID3D12Device2* device, Context* ctx, Array_View<T>data_cpu, D3D12_RESOURCE_STATES end_state)
-	{
-		auto cmd_list = ctx->cmd_list;
-		GPU_Resource out{};
-		
-		ID3D12Resource* vb_staging = nullptr;
-		const u32 buffer_size = data_cpu.size * sizeof(T);
-		const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
-			
-		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-																				D3D12_HEAP_FLAG_NONE,
-																				&desc,
-																				D3D12_RESOURCE_STATE_GENERIC_READ,
-																				nullptr,
-																				IID_PPV_ARGS(&vb_staging)));
-			
-		void* ptr = nullptr;
-		CD3DX12_RANGE range(0, 0);
-		THR(vb_staging->Map(0, &range, &ptr));
-		memcpy(ptr, data_cpu.data, buffer_size);
-		vb_staging->Unmap(0, nullptr);
-	
-		out.desc = desc;
-		out.state = end_state;
-		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-																				D3D12_HEAP_FLAG_NONE,
-																				&desc,
-																				D3D12_RESOURCE_STATE_COMMON,
-																				nullptr,
-																				IID_PPV_ARGS(&out.ptr)));
-			
-		cmd_list->CopyResource(out.ptr, vb_staging);
-		cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
-																																					(out.ptr, 
-																																						D3D12_RESOURCE_STATE_COPY_DEST, 
-																																						out.state)));
-		return out;
-	}
-	
-} // Namespace DX

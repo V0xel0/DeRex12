@@ -5,9 +5,15 @@
 
 #include "Utils.hpp"
 
-// Version 0.0.3 23.02.2024
+// Version 0.0.4 18.05.2024
 
 //TODO: Extend String_View implementation
+
+struct Memory_View
+{
+	s64 bytes;
+	void* data;
+};
 
 template<typename T>
 struct Array_View

@@ -58,8 +58,8 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		                  1, 5, 6, 1, 6, 2,
 		                  4, 0, 3, 4, 3, 7);
 		
-		data_to_rhi->st_verts		=	vertex_data;
-		data_to_rhi->st_indices	=	indices_data;
+		data_to_rhi->st_verts		=	{ .bytes = vertex_data.count * sizeof(Vertex),	.data = vertex_data.data };
+		data_to_rhi->st_indices = { .bytes = indices_data.count * sizeof(u32),		.data = indices_data.data };
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		data_to_rhi->is_new_static = true;
 		

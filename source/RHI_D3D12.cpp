@@ -76,6 +76,46 @@ namespace DX
 	}
 	
 	[[nodiscard]]
+	GPU_Resource upload_static_data(ID3D12Device2* device, Context* ctx, Memory_View mem, D3D12_RESOURCE_STATES end_state)
+	{
+		auto cmd_list = ctx->cmd_list;
+		GPU_Resource out{};
+		
+		ID3D12Resource* vb_staging = nullptr;
+		const s64 buffer_size = mem.bytes;
+		const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
+			
+		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+																				D3D12_HEAP_FLAG_NONE,
+																				&desc,
+																				D3D12_RESOURCE_STATE_GENERIC_READ,
+																				nullptr,
+																				IID_PPV_ARGS(&vb_staging)));
+			
+		void* ptr = nullptr;
+		CD3DX12_RANGE range(0, 0);
+		THR(vb_staging->Map(0, &range, &ptr));
+		memcpy(ptr, mem.data, buffer_size);
+		vb_staging->Unmap(0, nullptr);
+	
+		out.desc = desc;
+		out.state = end_state;
+		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+																				D3D12_HEAP_FLAG_NONE,
+																				&desc,
+																				D3D12_RESOURCE_STATE_COMMON,
+																				nullptr,
+																				IID_PPV_ARGS(&out.ptr)));
+			
+		cmd_list->CopyResource(out.ptr, vb_staging);
+		cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
+																																					 (out.ptr, 
+																																						D3D12_RESOURCE_STATE_COPY_DEST, 
+																																						out.state)));
+		return out;
+	}
+	
+	[[nodiscard]]
 	internal IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_point, LPCWSTR target)
 	{
 		LPCWSTR args[] =
@@ -219,6 +259,19 @@ namespace DX
 			out.h_gpu = { .ptr = heap->base.h_gpu.ptr + heap->descriptor_size * heap->count };
 		heap->count += 1;
 		
+		return out;
+	}
+	
+	Resource_View push_descriptor(ID3D12Device2* device, Descriptor_Heap* heap, GPU_Resource resource, D3D12_SHADER_RESOURCE_VIEW_DESC desc)
+	{
+		Resource_View out {};
+				
+		Descriptor srv_h = allocate_descriptor(heap);
+		out.id = heap->count - 1;
+		out.desc = desc;
+	
+		device->CreateShaderResourceView(resource.ptr, &out.desc, srv_h.h_cpu);
+				
 		return out;
 	}
 	
@@ -427,8 +480,6 @@ namespace DX
 		}
 		return out;
 	}
-	
-
 } // namespace DX
 
 extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
@@ -568,39 +619,25 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, &data_from_app->cb_frame, sizeof(data_from_app->cb_frame));
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, &data_from_app->cb_draw, sizeof(data_from_app->cb_draw));
-		
-		// Push SRVs for static data
-		{
-			// Vertices
-			{
-				Descriptor srv_h = allocate_descriptor(cbv_srv_uav_heap);
-				D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-				srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
-				srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				srv_desc.Buffer = {
-													.FirstElement = 0,
-													.NumElements = (u32)vertices_static.desc.Width / sizeof(Vertex),
-													.StructureByteStride = sizeof(Vertex),
-													.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE
-				};
-				device->CreateShaderResourceView(vertices_static.ptr, &srv_desc, srv_h.h_cpu);
-			}
-			
-			// Indices
-			{
-				Descriptor srv_h = allocate_descriptor(cbv_srv_uav_heap);
-				D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-				srv_desc.Format = DXGI_FORMAT::DXGI_FORMAT_R32_UINT; //SYNC THIS!
-				srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				srv_desc.Buffer = {
-													.NumElements = (u32)indices_static.desc.Width / sizeof(u32)
-				};
-				device->CreateShaderResourceView(indices_static.ptr, &srv_desc, srv_h.h_cpu);
-			}
-		}
-			
+
+		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, vertices_static, 
+																								 {
+																									.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+																									.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																									.Buffer = {
+																															.FirstElement = 0,
+																															.NumElements = (u32)vertices_static.desc.Width / sizeof(Vertex),
+																															.StructureByteStride = sizeof(Vertex),
+																															.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
+																									 }});
+		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, indices_static,
+																								 {
+																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R32_UINT, //SYNC THIS!
+																									 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+																									 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																									 .Buffer = {
+																															.NumElements = (u32)indices_static.desc.Width / sizeof(u32)
+																									 }});
 		// Populate command list
 		{
 			// Default state
@@ -616,9 +653,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(2, cbv_gpu_addr_frame);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
 				ctx->cmd_list->SetGraphicsRoot32BitConstants(0, sizeof(Draw_Ids) / sizeof(u32),
-																										 get_cptr(Draw_Ids{0, 1}), 0); //TODO: indexes from descriptor
+																										 get_cptr(Draw_Ids{view_verts.id, view_indices.id}), 0);
 				
-				ctx->cmd_list->DrawInstanced((u32)indices_static.desc.Width / sizeof(u32), 1, 0, 0);
+				ctx->cmd_list->DrawInstanced(view_indices.desc.Buffer.NumElements, 1, 0, 0);
 			}
 		}
 			
