@@ -5,12 +5,15 @@
 using namespace lib;
 #endif
 
+//============================ RHI -> Shader ============================
 struct Draw_Ids
 {
 	u32 pos_id;
 	u32 ind_id;
 };
 
+
+//============================ Application -> Shader ============================
 struct Vertex
 {
 	Vec4 position;

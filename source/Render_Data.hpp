@@ -17,10 +17,10 @@ struct Data_To_RHI
 {
 	Memory_View st_verts;
 	Memory_View st_indices;
+	
 	const wchar_t* shader_path;
 	b32 is_new_static;
 	
-	Constant_Data_Frame cb_frame;
-	Constant_Data_Draw cb_draw;
-	f64 time_passed_ms;
+	Memory_View cb_frame;
+	Memory_View cb_draw;
 };

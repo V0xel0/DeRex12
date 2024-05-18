@@ -3,10 +3,8 @@
 /* TODOs
  * 
  * 1)	Data pools for GPU & CPU Data
- * 2) Subsystem for rendering?
- * 3) Move GPU related data to new subsystem
- * 		subsytem for creation of data (probably RHI related)
- * 		subsytem for consumption of data
+ * 2) Transient state
+ * 
  * 
  * */
 
@@ -22,9 +20,8 @@ struct Camera
 struct App_State
 {
 	Alloc_Arena arena_persist;
-	Alloc_Arena arena_assets;
-	
-	Data_To_RHI data_for_rhi;
+	Alloc_Arena arena_transient;
+	b32 is_transient_initalized;
 	
 	Camera camera;
 };

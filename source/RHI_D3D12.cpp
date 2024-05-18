@@ -209,10 +209,11 @@ namespace DX
 		return out;
 	}
 	
-	D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Memory_Heap* heap, void* src, u32 size)
+	[[nodiscard]]
+	D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Memory_Heap* heap, Memory_View mem)
 	{
-		const auto [cpu_addr, gpu_addr] = allocate_to_upload_heap(heap, sizeof(Constant_Data_Frame));
-		memcpy(cpu_addr, src, size);
+		const auto [cpu_addr, gpu_addr] = allocate_to_upload_heap(heap, mem.bytes);
+		memcpy(cpu_addr, mem.data, mem.bytes);
 			
 		return gpu_addr;
 	}
@@ -617,8 +618,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			ctx->cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_heap->base.h_cpu);
 		}
 			
-		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, &data_from_app->cb_frame, sizeof(data_from_app->cb_frame));
-		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, &data_from_app->cb_draw, sizeof(data_from_app->cb_draw));
+		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, data_from_app->cb_frame);
+		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, data_from_app->cb_draw);
 
 		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, vertices_static, 
 																								 {

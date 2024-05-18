@@ -25,32 +25,36 @@ inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 spee
 extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window, Game_Input *inputs)
 {
 	App_State* app_state = (App_State*)memory->permanent_storage;
-	auto* data_to_rhi = &app_state->data_for_rhi;
-	auto* camera 			= &app_state->camera;
-	app_state->data_for_rhi = {}; // zero every time
-	arena_reset(&app_state->arena_assets); // reset all previous frame
+	auto* camera = &app_state->camera;
+	arena_reset(&app_state->arena_transient); // reset all previous frame
 	
 	if (!memory->is_initalized)
 	{
 		app_state->arena_persist.max_size = memory->size_permanent_storage - sizeof(App_State);
 		app_state->arena_persist.base 		= (byte*)memory->permanent_storage + sizeof(App_State);
-		app_state->arena_assets.max_size 	= memory->size_transient_storage;
-		app_state->arena_assets.base 			= (byte*)memory->transient_storage;
-		
+		app_state->arena_transient.max_size 	= memory->size_transient_storage;
+		app_state->arena_transient.base 			= (byte*)memory->transient_storage;
+			
+		memory->is_initalized = true;
+	}
+	
+	auto* data_to_rhi = push_type<Data_To_RHI>(&app_state->arena_transient);
+	
+	if(!app_state->is_transient_initalized)
+	{
 		// Static data CPU creation
 		Array_View<Vertex>vertex_data{};
-		vertex_data.init(&app_state->arena_assets, 
-		              Vertex{ {-1.f, -1.f, -1.f, 1.0f},	{0.f, 0.f, 0.f, 1.0f} }, // 0
-									Vertex{ {-1.f, 1.f, -1.f, 1.0f},	{0.f, 1.f, 0.f, 1.0f} }, // 1
-									Vertex{ {1.f, 1.f, -1.f, 1.0f},		{1.f, 1.f, 0.f, 1.0f} }, // 2
-									Vertex{ {1.f, -1.f, -1.f, 1.0f},	{1.f, 0.f, 0.f, 1.0f} }, // 3
-									Vertex{ {-1.f, -1.f, 1.f, 1.0f},	{0.f, 0.f, 1.f, 1.0f} }, // 4
-									Vertex{ {-1.f, 1.f, 1.f, 1.0f},		{0.f, 1.f, 1.f, 1.0f} }, // 5
-									Vertex{ { 1.f, 1.f, 1.f, 1.0f},		{1.f, 1.f, 1.f, 1.0f} }, // 6
-									Vertex{ { 1.f, -1.f, 1.f, 1.0f},	{1.f, 0.f, 1.f, 1.0f} });  // 7
-		
+		vertex_data.init(&app_state->arena_transient, 
+										 Vertex{ {-1.f, -1.f, -1.f, 1.0f},	{0.f, 0.f, 0.f, 1.0f} }, // 0
+										 Vertex{ {-1.f, 1.f, -1.f, 1.0f},	{0.f, 1.f, 0.f, 1.0f} }, // 1
+										 Vertex{ {1.f, 1.f, -1.f, 1.0f},		{1.f, 1.f, 0.f, 1.0f} }, // 2
+										 Vertex{ {1.f, -1.f, -1.f, 1.0f},	{1.f, 0.f, 0.f, 1.0f} }, // 3
+										 Vertex{ {-1.f, -1.f, 1.f, 1.0f},	{0.f, 0.f, 1.f, 1.0f} }, // 4
+										 Vertex{ {-1.f, 1.f, 1.f, 1.0f},		{0.f, 1.f, 1.f, 1.0f} }, // 5
+										 Vertex{ { 1.f, 1.f, 1.f, 1.0f},		{1.f, 1.f, 1.f, 1.0f} }, // 6
+										 Vertex{ { 1.f, -1.f, 1.f, 1.0f},	{1.f, 0.f, 1.f, 1.0f} });  // 7
 		Array_View<u32>indices_data{};
-		indices_data.init(&app_state->arena_assets, 		
+		indices_data.init(&app_state->arena_transient, 		
 		                  0, 1, 2, 0, 2, 3,
 		                  4, 6, 5, 4, 7, 6,
 		                  4, 5, 1, 4, 1, 0,
@@ -65,7 +69,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		
 		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };
 		
-		memory->is_initalized = true;
+		app_state->is_transient_initalized = true;
 	}
 	
 	// Camera
@@ -136,14 +140,18 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		
 		// Pushing data
 		{
-			// General data
-			data_to_rhi->time_passed_ms = window->time_ms;
+			auto* frame_consts =	push_type<Constant_Data_Frame>(&app_state->arena_transient);
+			auto* draw_consts =		push_type<Constant_Data_Draw>(&app_state->arena_transient);
+			
 			// Frame constants
-			data_to_rhi->cb_frame.light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 1.0f });
-			data_to_rhi->cb_frame.light_col = { pulse, pulse, pulse, 1.0f };
+			frame_consts->light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 1.0f });
+			frame_consts->light_col = { pulse, pulse, pulse, 1.0f };
 			// Draw constants
-			data_to_rhi->cb_draw.obj_to_world = mat_model;
-			data_to_rhi->cb_draw.world_to_clip = mat_projection * mat_view;
+			draw_consts->obj_to_world = mat_model;
+			draw_consts->world_to_clip = mat_projection * mat_view;
+			
+			data_to_rhi->cb_frame = { .bytes = sizeof(*frame_consts), .data = frame_consts };
+			data_to_rhi->cb_draw  = { .bytes = sizeof(*draw_consts), .data = draw_consts };
 		}
 	}
 	
