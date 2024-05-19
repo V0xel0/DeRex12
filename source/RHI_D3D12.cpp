@@ -76,46 +76,6 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	GPU_Resource upload_static_data(ID3D12Device2* device, Context* ctx, Memory_View mem, D3D12_RESOURCE_STATES end_state)
-	{
-		auto cmd_list = ctx->cmd_list;
-		GPU_Resource out{};
-		
-		ID3D12Resource* vb_staging = nullptr;
-		const s64 buffer_size = mem.bytes;
-		const D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
-			
-		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-																				D3D12_HEAP_FLAG_NONE,
-																				&desc,
-																				D3D12_RESOURCE_STATE_GENERIC_READ,
-																				nullptr,
-																				IID_PPV_ARGS(&vb_staging)));
-			
-		void* ptr = nullptr;
-		CD3DX12_RANGE range(0, 0);
-		THR(vb_staging->Map(0, &range, &ptr));
-		memcpy(ptr, mem.data, buffer_size);
-		vb_staging->Unmap(0, nullptr);
-	
-		out.desc = desc;
-		out.state = end_state;
-		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-																				D3D12_HEAP_FLAG_NONE,
-																				&desc,
-																				D3D12_RESOURCE_STATE_COMMON,
-																				nullptr,
-																				IID_PPV_ARGS(&out.ptr)));
-			
-		cmd_list->CopyResource(out.ptr, vb_staging);
-		cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
-																																					 (out.ptr, 
-																																						D3D12_RESOURCE_STATE_COPY_DEST, 
-																																						out.state)));
-		return out;
-	}
-	
-	[[nodiscard]]
 	internal IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_point, LPCWSTR target)
 	{
 		LPCWSTR args[] =
@@ -177,11 +137,11 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal Memory_Heap create_upload_heap(ID3D12Device2* device, u64 max_bytes, D3D12_HEAP_TYPE type)
+	internal Memory_Heap create_upload_heap(ID3D12Device2* device, u64 max_bytes)
 	{
 		Memory_Heap out{};
 		
-		THR(device->CreateCommittedResource(get_cptr<D3D12_HEAP_PROPERTIES>({ .Type = type }),
+		THR(device->CreateCommittedResource(get_cptr<D3D12_HEAP_PROPERTIES>({ .Type = D3D12_HEAP_TYPE_UPLOAD }),
 		                                    D3D12_HEAP_FLAG_NONE,
 		                                    get_cptr(CD3DX12_RESOURCE_DESC::Buffer(max_bytes)),
 		                                    D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -222,6 +182,34 @@ namespace DX
 	{
 		arena_reset_nz(&heap->heap_arena);
 	}
+	
+	//TODO: return handle to resource
+	GPU_Resource allocate_to_default(ID3D12Device2* device, D3D12_RESOURCE_DESC desc)
+	{
+		GPU_Resource out{.desc = desc};
+		
+		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+																				D3D12_HEAP_FLAG_NONE,
+																				&out.desc,
+																				D3D12_RESOURCE_STATE_COMMON,
+																				nullptr,
+																				IID_PPV_ARGS(&out.ptr)));
+		
+		return out;
+	}
+	
+	//TODO: take handle to resource
+	void push_to_default(Context* ctx, GPU_Resource* res, Memory_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state)
+	{
+		auto gpu_h = push_to_upload_heap(upload, mem);
+		u64 aligned_size = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
+		ctx->cmd_list->CopyBufferRegion(res->ptr, 0, upload->heap, upload->heap_arena.prev_offset, aligned_size);
+		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
+																																						 (res->ptr, 
+																																							D3D12_RESOURCE_STATE_COPY_DEST, 
+																																							end_state)));
+		res->state = end_state;
+	} 
 	
 	[[nodiscard]]
 	internal Descriptor_Heap create_descriptor_heap(ID3D12Device2* device, u32 count_descriptors, 
@@ -412,7 +400,7 @@ namespace DX
 		{
 			for(u32 frame_i = 0; frame_i < g_count_backbuffers; ++frame_i)
 			{
-				g_state.upload_heaps[frame_i] = create_upload_heap(g_state.device, g_upload_heap_max_size, D3D12_HEAP_TYPE_UPLOAD);
+				g_state.upload_heaps[frame_i] = create_upload_heap(g_state.device, g_upload_heap_max_size);
 				g_state.cbv_srv_uav_heap[frame_i] = create_descriptor_heap(g_state.device, g_max_count_cbv_srv_uav_descriptors,
 																																	 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
 																																	 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE);
@@ -510,12 +498,17 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& vertices_static = g_state.vertices_static;
 	auto& indices_static 	= g_state.indices_static;
 	auto& static_pso 			= g_state.static_pso;
+	
+	auto* upload_heap = &g_state.upload_heaps[frame_index];
 
 	// Static data upload
 	if (data_from_app->is_new_static)
 	{
-		vertices_static = upload_static_data(device, ctx, data_from_app->st_verts, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		indices_static 	= upload_static_data(device, ctx, data_from_app->st_indices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		vertices_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_verts.bytes));
+		push_to_default(ctx, &vertices_static, upload_heap, data_from_app->st_verts, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		indices_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_verts.bytes));
+		push_to_default(ctx, &indices_static, upload_heap, data_from_app->st_indices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		
 		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
 	}
@@ -597,7 +590,6 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	{
 		auto cmd_alloc = ctx->cmd_allocators[frame_index];
 		auto backbuffer = rtv_texture[frame_index];
-		auto* upload_heap = &g_state.upload_heaps[frame_index];
 		auto* cbv_srv_uav_heap = &g_state.cbv_srv_uav_heap[frame_index];
 			
 		THR(cmd_alloc->Reset());

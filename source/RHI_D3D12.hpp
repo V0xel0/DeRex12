@@ -17,6 +17,7 @@ inline void THR(HRESULT) {}
 #define RELEASE_SAFE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 inline constexpr u8 g_count_backbuffers = 3;
+inline constexpr u32 max_temp_barriers = 32;
 
 struct Data_To_RHI;
 
@@ -79,6 +80,10 @@ struct Context
 	ID3D12CommandQueue* queue;
 	ID3D12GraphicsCommandList* cmd_list;
 	ID3D12CommandAllocator* cmd_allocators[g_count_backbuffers]{};
+	
+	//TODO: Just for now, later memory from platform?
+	D3D12_RESOURCE_BARRIER bar_buffor[max_temp_barriers];
+	Array_View<D3D12_RESOURCE_BARRIER>temp_barriers { .size = max_temp_barriers, .data = bar_buffor };
 	
 	DX::Fence fence;
 };
