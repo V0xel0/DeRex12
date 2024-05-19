@@ -137,9 +137,9 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal Memory_Heap create_upload_heap(ID3D12Device2* device, u64 max_bytes)
+	internal Upload_Heap create_upload_heap(ID3D12Device2* device, u64 max_bytes)
 	{
-		Memory_Heap out{};
+		Upload_Heap out{};
 		
 		THR(device->CreateCommittedResource(get_cptr<D3D12_HEAP_PROPERTIES>({ .Type = D3D12_HEAP_TYPE_UPLOAD }),
 		                                    D3D12_HEAP_FLAG_NONE,
@@ -159,7 +159,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	internal auto allocate_to_upload_heap(Memory_Heap* heap, u64 size)
+	internal auto allocate_to_upload_heap(Upload_Heap* heap, u64 size)
 	{
 		struct { u8* addr_cpu; D3D12_GPU_VIRTUAL_ADDRESS addr_gpu; }out;
 		
@@ -170,7 +170,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Memory_Heap* heap, Memory_View mem)
+	D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Upload_Heap* heap, Memory_View mem)
 	{
 		const auto [cpu_addr, gpu_addr] = allocate_to_upload_heap(heap, mem.bytes);
 		memcpy(cpu_addr, mem.data, mem.bytes);
@@ -178,7 +178,7 @@ namespace DX
 		return gpu_addr;
 	}
 	
-	internal void reset_upload_heap(Memory_Heap* heap)
+	internal void reset_upload_heap(Upload_Heap* heap)
 	{
 		arena_reset_nz(&heap->heap_arena);
 	}
@@ -199,7 +199,7 @@ namespace DX
 	}
 	
 	//TODO: take handle to resource
-	void push_to_default(Context* ctx, GPU_Resource* res, Memory_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state)
+	void push_to_default(Context* ctx, GPU_Resource* res, Upload_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state)
 	{
 		auto gpu_h = push_to_upload_heap(upload, mem);
 		u64 aligned_size = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
@@ -251,7 +251,8 @@ namespace DX
 		return out;
 	}
 	
-	Resource_View push_descriptor(ID3D12Device2* device, Descriptor_Heap* heap, GPU_Resource resource, D3D12_SHADER_RESOURCE_VIEW_DESC desc)
+	//TODO: take handle to resource
+	Resource_View push_descriptor(ID3D12Device2* device, Descriptor_Heap* heap, GPU_Resource* resource, D3D12_SHADER_RESOURCE_VIEW_DESC desc)
 	{
 		Resource_View out {};
 				
@@ -259,7 +260,7 @@ namespace DX
 		out.id = heap->count - 1;
 		out.desc = desc;
 	
-		device->CreateShaderResourceView(resource.ptr, &out.desc, srv_h.h_cpu);
+		device->CreateShaderResourceView(resource->ptr, &out.desc, srv_h.h_cpu);
 				
 		return out;
 	}
@@ -613,7 +614,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, data_from_app->cb_frame);
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, data_from_app->cb_draw);
 
-		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, vertices_static, 
+		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, &vertices_static, 
 																								 {
 																									.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 																									.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
@@ -623,7 +624,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																															.StructureByteStride = sizeof(Vertex),
 																															.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
 																									 }});
-		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, indices_static,
+		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, &indices_static,
 																								 {
 																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R32_UINT, //SYNC THIS!
 																									 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,

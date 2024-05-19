@@ -21,7 +21,10 @@ struct App_State
 {
 	Alloc_Arena arena_persist;
 	Alloc_Arena arena_transient;
-	b32 is_transient_initalized;
+	
+	Alloc_Arena arena_frame;
+	Alloc_Arena arena_assets;
+	b32 is_new_level;
 	
 	Camera camera;
 };

@@ -15,6 +15,9 @@
 #include "Render_Data.hpp"
 #include "App.hpp"
 
+inline constexpr u64 frame_max_size = MiB(128);
+inline constexpr u64 assets_max_size = GiB(1);
+
 inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.15f)
 {
 	lib::Vec3 out = cam_pos;
@@ -26,7 +29,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 {
 	App_State* app_state = (App_State*)memory->permanent_storage;
 	auto* camera = &app_state->camera;
-	arena_reset(&app_state->arena_transient); // reset all previous frame
+	arena_reset(&app_state->arena_frame); // reset all previous frame
 	
 	if (!memory->is_initalized)
 	{
@@ -34,17 +37,20 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		app_state->arena_persist.base 		= (byte*)memory->permanent_storage + sizeof(App_State);
 		app_state->arena_transient.max_size 	= memory->size_transient_storage;
 		app_state->arena_transient.base 			= (byte*)memory->transient_storage;
+		
+		app_state->arena_frame = arena_from_allocator(&app_state->arena_transient, frame_max_size);
+		app_state->arena_assets = arena_from_allocator(&app_state->arena_transient, assets_max_size);
 			
 		memory->is_initalized = true;
 	}
 	
-	auto* data_to_rhi = push_type<Data_To_RHI>(&app_state->arena_transient);
+	auto* data_to_rhi = push_type<Data_To_RHI>(&app_state->arena_frame);
 	
-	if(!app_state->is_transient_initalized)
+	if(!app_state->is_new_level)
 	{
 		// Static data CPU creation
 		Array_View<Vertex>vertex_data{};
-		vertex_data.init(&app_state->arena_transient, 
+		vertex_data.init(&app_state->arena_frame, 
 										 Vertex{ {-1.f, -1.f, -1.f, 1.0f},	{0.f, 0.f, 0.f, 1.0f} }, // 0
 										 Vertex{ {-1.f, 1.f, -1.f, 1.0f},	{0.f, 1.f, 0.f, 1.0f} }, // 1
 										 Vertex{ {1.f, 1.f, -1.f, 1.0f},		{1.f, 1.f, 0.f, 1.0f} }, // 2
@@ -54,7 +60,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 										 Vertex{ { 1.f, 1.f, 1.f, 1.0f},		{1.f, 1.f, 1.f, 1.0f} }, // 6
 										 Vertex{ { 1.f, -1.f, 1.f, 1.0f},	{1.f, 0.f, 1.f, 1.0f} });  // 7
 		Array_View<u32>indices_data{};
-		indices_data.init(&app_state->arena_transient, 		
+		indices_data.init(&app_state->arena_frame, 		
 		                  0, 1, 2, 0, 2, 3,
 		                  4, 6, 5, 4, 7, 6,
 		                  4, 5, 1, 4, 1, 0,
@@ -65,11 +71,11 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		data_to_rhi->st_verts		=	{ .bytes = vertex_data.count * sizeof(Vertex),	.data = vertex_data.data };
 		data_to_rhi->st_indices = { .bytes = indices_data.count * sizeof(u32),		.data = indices_data.data };
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
-		data_to_rhi->is_new_static = true;
 		
 		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };
 		
-		app_state->is_transient_initalized = true;
+		app_state->is_new_level = true;
+		data_to_rhi->is_new_static = app_state->is_new_level;
 	}
 	
 	// Camera
@@ -140,8 +146,8 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		
 		// Pushing data
 		{
-			auto* frame_consts =	push_type<Constant_Data_Frame>(&app_state->arena_transient);
-			auto* draw_consts =		push_type<Constant_Data_Draw>(&app_state->arena_transient);
+			auto* frame_consts =	push_type<Constant_Data_Frame>(&app_state->arena_frame);
+			auto* draw_consts =		push_type<Constant_Data_Draw>(&app_state->arena_frame);
 			
 			// Frame constants
 			frame_consts->light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 1.0f });

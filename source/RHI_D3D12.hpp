@@ -43,7 +43,7 @@ namespace DX
 		HANDLE event;
 	};
 	
-	struct Memory_Heap
+	struct Upload_Heap
 	{
 		Alloc_Arena heap_arena;
 		ID3D12Resource* heap;
@@ -102,7 +102,7 @@ struct RHI_State
 	GPU_Resource dsv_texture;
 	DX::Descriptor_Heap dsv_heap;
 	
-	DX::Memory_Heap upload_heaps[g_count_backbuffers];
+	DX::Upload_Heap upload_heaps[g_count_backbuffers];
 	DX::Descriptor_Heap cbv_srv_uav_heap[g_count_backbuffers];
 	
 	u32 frame_index;
