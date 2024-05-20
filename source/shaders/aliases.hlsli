@@ -1,4 +1,5 @@
 #pragma once
+#define u16 uint16_t
 #define u32 uint
 #define f32 float
 #define Vec2 float2

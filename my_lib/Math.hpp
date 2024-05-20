@@ -855,6 +855,19 @@ namespace lib
 	}
 	
 	[[nodiscard]]
+	inline Mat4 create_scale(const f32 val = 1.0f)
+	{
+		Mat4 out{};
+		
+		out.e[0][0] = val;
+		out.e[1][1] = val;
+		out.e[2][2] = val;
+		out.e[3][3] = 1.0f;
+
+		return out;
+	}
+	
+	[[nodiscard]]
 	inline Mat4 create_translate(Vec3 translation)
 	{
 		Mat4 out = create_diagonal_matrix();

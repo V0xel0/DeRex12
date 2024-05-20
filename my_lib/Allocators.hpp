@@ -119,6 +119,16 @@ inline void arena_reset_nz(Alloc_Arena *arena)
 	arena->prev_offset = 0;
 }
 
+inline void *arena_alloc_for_lib(void *arena, u64 size)
+{
+	return allocate((Alloc_Arena *)arena, size);
+}
+
+inline void arena_reset_for_lib(void *arena, void *ptr)
+{
+	// Nothing
+}
+
 struct Alloc_Stack_Header
 {
 	u64 prev_offset;

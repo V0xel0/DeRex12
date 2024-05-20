@@ -11,8 +11,9 @@
 
 struct Memory_View
 {
-	s64 bytes;
 	void* data;
+	u32 bytes;
+	u32 stride;
 };
 
 template<typename T>
@@ -20,7 +21,7 @@ struct Array_View
 {
 	s32 size;
 	s32 count;
-	T *data;
+	T* data;
 
 	constexpr T& operator[] (s32 i)
 	{

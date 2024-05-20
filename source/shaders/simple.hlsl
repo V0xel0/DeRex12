@@ -22,17 +22,17 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 {
 	PSInput result;
  
-	Buffer<u32> indices_buffer 					= ResourceDescriptorHeap[cb_draw_ids.ind_id];
+	Buffer<u16> indices_buffer 					= ResourceDescriptorHeap[cb_draw_ids.ind_id];
 	StructuredBuffer<Vertex> pos_buffer = ResourceDescriptorHeap[cb_draw_ids.pos_id];
 	
 	u32 vert_index = indices_buffer[vertex_id];
-	float4 pos = pos_buffer[vert_index].position;
+	float4 pos = float4(pos_buffer[vert_index].position, 1.0f);
 	
 	const float4x4 obj_to_world = cb_per_draw.obj_to_world;
 	const float4x4 obj_to_clip = mul(cb_per_draw.world_to_clip, obj_to_world);
 	
 	result.pos_ndc = mul(obj_to_clip, pos);
-	result.color = pos_buffer[vert_index].color;
+	//result.color = pos_buffer[vert_index].color;
  
 	return result;
 }
@@ -41,5 +41,5 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	//return input.color;
-	return cb_per_frame.light_col * input.color;
+	return cb_per_frame.light_col;
 }
