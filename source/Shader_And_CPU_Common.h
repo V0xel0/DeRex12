@@ -16,8 +16,7 @@ struct Draw_Ids
 //============================ Application -> Shader ============================
 struct Vertex
 {
-	Vec4 position;
-	Vec4 color;
+	Vec3 position;
 };
 
 struct Constant_Data_Frame
