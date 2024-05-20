@@ -222,6 +222,35 @@ namespace DX
 		res->state = end_state;
 	} 
 	
+	void push_texture_to_default(ID3D12Device2* device, Context* ctx, GPU_Resource* res, Upload_Heap* upload, Image_View imv, D3D12_RESOURCE_STATES end_state)
+	{
+		auto gpu_h = push_to_upload_heap(upload, imv.mem);
+		u64 aligned_size = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
+	
+		// Probably not need as data in Image_View should be enough
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
+		u64 required_size;
+		device->GetCopyableFootprints(&res->desc, 0, 1, 0, &layout, NULL, NULL, &required_size);
+		layout.Offset = upload->heap_arena.prev_offset;
+	
+		ctx->cmd_list->CopyTextureRegion(
+			get_cptr<D3D12_TEXTURE_COPY_LOCATION>({
+				.pResource = res->ptr,
+				.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+				.SubresourceIndex = 0
+		}),0,0,0,
+			get_cptr<D3D12_TEXTURE_COPY_LOCATION>({
+				.pResource = upload->heap,
+				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.PlacedFootprint = layout
+		}), nullptr );
+		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
+																																							(res->ptr, 
+																																							 D3D12_RESOURCE_STATE_COPY_DEST, 
+																																							 end_state)));
+		res->state = end_state;
+	} 
+	
 	[[nodiscard]]
 	internal Descriptor_Heap create_descriptor_heap(ID3D12Device2* device, u32 count_descriptors, 
 																				 D3D12_DESCRIPTOR_HEAP_TYPE type,
@@ -509,6 +538,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	
 	auto& vertices_static = g_state.vertices_static;
 	auto& indices_static 	= g_state.indices_static;
+	auto& tex_albedo_static 	= g_state.tex_albedo_static;
 	auto& static_pso 			= g_state.static_pso;
 	
 	auto* upload_heap = &g_state.upload_heaps[frame_index];
@@ -520,6 +550,11 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		push_to_default(ctx, &vertices_static, upload_heap, data_from_app->st_verts, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		indices_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_indices.bytes));
 		push_to_default(ctx, &indices_static, upload_heap, data_from_app->st_indices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		tex_albedo_static = allocate_to_default(device, 
+																						 CD3DX12_RESOURCE_DESC::Tex2D((DXGI_FORMAT)data_from_app->st_albedo.format, 
+																																					data_from_app->st_albedo.width, 
+																																					data_from_app->st_albedo.height));
+		push_texture_to_default(device, ctx, &tex_albedo_static, upload_heap, data_from_app->st_albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		
 		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
@@ -627,14 +662,14 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 
 		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, &vertices_static, 
 																								 {
-																									.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-																									.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-																									.Buffer = {
+																										.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+																										.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																										.Buffer = {
 																															.FirstElement = 0,
 																															.NumElements = (u32)vertices_static.desc.Width / sizeof(Vertex),
 																															.StructureByteStride = sizeof(Vertex),
 																															.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
-																									 }});
+																									}});
 		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, &indices_static,
 																								 {
 																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R16_UINT, //SYNC THIS!
@@ -642,7 +677,15 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																									 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																									 .Buffer = {
 																															.NumElements = (u32)indices_static.desc.Width / 2 // SYNC THIS!
-																									 }});
+																									}});
+		
+		Resource_View view_tex_albedo = push_descriptor(device, cbv_srv_uav_heap, &tex_albedo_static, 
+																										{
+																											.Format = tex_albedo_static.desc.Format,
+																											.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+																											.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																											.Texture2D = {.MipLevels = 1}
+																										});
 		// Populate command list
 		{
 			// Default state

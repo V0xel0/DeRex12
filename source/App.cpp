@@ -130,6 +130,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		// Sending mesh geometric data to RHI
 		data_to_rhi->st_verts = level_geo.positions;
 		data_to_rhi->st_indices = level_geo.indices;
+		data_to_rhi->st_albedo = level_tex_albedo;
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
 		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };

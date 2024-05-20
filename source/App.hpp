@@ -19,11 +19,11 @@ struct Camera
 
 struct Geometry
 {
-	Memory_View positions;
 	Memory_View indices;
+	Memory_View positions;
+	Memory_View uvs;
 	Memory_View normals;
 	Memory_View tangents;
-	Memory_View uvs;
 	Memory_View colors;
 };
 
