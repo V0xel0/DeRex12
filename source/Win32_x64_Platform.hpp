@@ -15,8 +15,19 @@
 #include <windows.h>
 #include <windowsx.h>
 
+#include <wincodec.h>
 #include <timeapi.h>
 #pragma warning( pop )
+
+#ifdef _DEBUG
+inline void THR(HRESULT hr) {
+	AlwaysAssert(SUCCEEDED(hr));
+}
+#else
+inline void THR(HRESULT) {}
+#endif
+		
+#define RELEASE_SAFE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 //? Win32 Platform layer implementations, intended to be used with "WINAPI WinMain" only!
 //? In order to provide distinction from Microsoft's WinApi functions "Win32" namespace is
@@ -46,6 +57,7 @@ namespace Win32
 	};
 
 	global_variable b32 g_is_running = true;
+	inline global_variable IWICImagingFactory* wic_factory;
 
 	LRESULT CALLBACK main_callback(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 	{
@@ -442,6 +454,167 @@ namespace Win32
 		}
 	}
 #endif
+	
+	//TODO: maybe move this loading to RHI?
+	//TODO: handle sRGB
+	DXGI_FORMAT wic_format_to_dxgi(WICPixelFormatGUID& wicFormatGUID)
+	{
+		DXGI_FORMAT out = DXGI_FORMAT_UNKNOWN;
+		
+    if (wicFormatGUID == GUID_WICPixelFormat128bppRGBAFloat) out = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBAHalf) out = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBA) out = DXGI_FORMAT_R16G16B16A16_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA) out = DXGI_FORMAT_R8G8B8A8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGRA) out = DXGI_FORMAT_B8G8R8A8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGR) out = DXGI_FORMAT_B8G8R8X8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA1010102XR) out = DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM;
+
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA1010102) out = DXGI_FORMAT_R10G10B10A2_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat16bppBGRA5551) out = DXGI_FORMAT_B5G5R5A1_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat16bppBGR565) out = DXGI_FORMAT_B5G6R5_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppGrayFloat) out = DXGI_FORMAT_R32_FLOAT;
+    else if (wicFormatGUID == GUID_WICPixelFormat16bppGrayHalf) out = DXGI_FORMAT_R16_FLOAT;
+    else if (wicFormatGUID == GUID_WICPixelFormat16bppGray) out = DXGI_FORMAT_R16_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat8bppGray) out = DXGI_FORMAT_R8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat8bppAlpha) out = DXGI_FORMAT_A8_UNORM;
+
+    else DXGI_FORMAT_UNKNOWN;
+		
+		return out;
+	}
+
+	u32 dxgi_format_to_bits_per_px(DXGI_FORMAT& dxgiFormat)
+	{
+		u32 out = 0;
+		
+    if (dxgiFormat == DXGI_FORMAT_R32G32B32A32_FLOAT) out = 128;
+    else if (dxgiFormat == DXGI_FORMAT_R16G16B16A16_FLOAT) out = 64;
+    else if (dxgiFormat == DXGI_FORMAT_R16G16B16A16_UNORM) out = 64;
+    else if (dxgiFormat == DXGI_FORMAT_R8G8B8A8_UNORM) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_B8G8R8A8_UNORM) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_B8G8R8X8_UNORM) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM) out = 32;
+
+    else if (dxgiFormat == DXGI_FORMAT_R10G10B10A2_UNORM) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_B5G5R5A1_UNORM) out = 16;
+    else if (dxgiFormat == DXGI_FORMAT_B5G6R5_UNORM) out = 16;
+    else if (dxgiFormat == DXGI_FORMAT_R32_FLOAT) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_R16_FLOAT) out = 16;
+    else if (dxgiFormat == DXGI_FORMAT_R16_UNORM) out = 16;
+    else if (dxgiFormat == DXGI_FORMAT_R8_UNORM) out = 8;
+    else if (dxgiFormat == DXGI_FORMAT_A8_UNORM) out = 8;
+		else AlwaysAssert(0 && "Invalid format");
+		
+		return out;
+	}
+	
+	// get a dxgi compatible wic format from another wic format
+	WICPixelFormatGUID find_compatible_wic(WICPixelFormatGUID& wicFormatGUID)
+	{
+		WICPixelFormatGUID out;
+		
+    if (wicFormatGUID == GUID_WICPixelFormatBlackWhite) out = GUID_WICPixelFormat8bppGray;
+    else if (wicFormatGUID == GUID_WICPixelFormat1bppIndexed) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat2bppIndexed) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat4bppIndexed) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat8bppIndexed) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat2bppGray) out = GUID_WICPixelFormat8bppGray;
+    else if (wicFormatGUID == GUID_WICPixelFormat4bppGray) out = GUID_WICPixelFormat8bppGray;
+    else if (wicFormatGUID == GUID_WICPixelFormat16bppGrayFixedPoint) out = GUID_WICPixelFormat16bppGrayHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppGrayFixedPoint) out = GUID_WICPixelFormat32bppGrayFloat;
+    else if (wicFormatGUID == GUID_WICPixelFormat16bppBGR555) out = GUID_WICPixelFormat16bppBGRA5551;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGR101010) out = GUID_WICPixelFormat32bppRGBA1010102;
+    else if (wicFormatGUID == GUID_WICPixelFormat24bppBGR) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat24bppRGB) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppPBGRA) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppPRGBA) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat48bppRGB) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat48bppBGR) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppBGRA) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppPRGBA) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppPBGRA) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat48bppRGBFixedPoint) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat48bppBGRFixedPoint) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBAFixedPoint) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppBGRAFixedPoint) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBFixedPoint) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBHalf) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat48bppRGBHalf) out = GUID_WICPixelFormat64bppRGBAHalf;
+    else if (wicFormatGUID == GUID_WICPixelFormat128bppPRGBAFloat) out = GUID_WICPixelFormat128bppRGBAFloat;
+    else if (wicFormatGUID == GUID_WICPixelFormat128bppRGBFloat) out = GUID_WICPixelFormat128bppRGBAFloat;
+    else if (wicFormatGUID == GUID_WICPixelFormat128bppRGBAFixedPoint) out = GUID_WICPixelFormat128bppRGBAFloat;
+    else if (wicFormatGUID == GUID_WICPixelFormat128bppRGBFixedPoint) out = GUID_WICPixelFormat128bppRGBAFloat;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBE) out = GUID_WICPixelFormat128bppRGBAFloat;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppCMYK) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppCMYK) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat40bppCMYKAlpha) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat80bppCMYKAlpha) out = GUID_WICPixelFormat64bppRGBA;
+
+		#if (_WIN32_WINNT >= _WIN32_WINNT_WIN8) || defined(_WIN7_PLATFORM_UPDATE)
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGB) out = GUID_WICPixelFormat32bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppRGB) out = GUID_WICPixelFormat64bppRGBA;
+    else if (wicFormatGUID == GUID_WICPixelFormat64bppPRGBAHalf) out = GUID_WICPixelFormat64bppRGBAHalf;
+		#endif
+
+    else AlwaysAssert(0 && "Invalid format");
+		
+		return out;
+	}
+	
+	Image_View load_img(const wchar_t* file_path, Alloc_Arena* arena)
+	{
+		DXGI_FORMAT dxgi_format = DXGI_FORMAT_UNKNOWN;
+		u32 img_width		= 0;
+		u32 img_height	= 0;
+		b32 is_converted = false;
+		Image_View out{};
+		
+		IWICBitmapDecoder* bitmap_decoder = nullptr;
+		IWICBitmapFrameDecode* bitmap_frame = nullptr;
+		IWICFormatConverter* converter = nullptr;
+		WICPixelFormatGUID pixel_format = {};
+		auto d = defer([&] { bitmap_decoder->Release(); bitmap_frame->Release(); converter->Release(); });
+		
+		THR(Win32::wic_factory->CreateDecoderFromFilename(file_path, NULL, 
+																									GENERIC_READ, 
+																									WICDecodeMetadataCacheOnDemand, &bitmap_decoder));
+		THR(bitmap_decoder->GetFrame(0, &bitmap_frame));
+    THR(bitmap_frame->GetPixelFormat(&pixel_format));
+		THR(Win32::wic_factory->CreateFormatConverter(&converter));
+		
+		dxgi_format = wic_format_to_dxgi(pixel_format);
+		
+		if (dxgi_format == DXGI_FORMAT_UNKNOWN)
+		{
+			WICPixelFormatGUID new_format = find_compatible_wic(pixel_format);
+			dxgi_format = wic_format_to_dxgi(new_format);
+			BOOL can_convert = false;
+			THR(converter->CanConvert(pixel_format, new_format, &can_convert));
+			AlwaysAssert(can_convert && "Cant convert!");
+			THR(converter->Initialize(bitmap_frame, new_format, WICBitmapDitherTypeNone, 0, 0, WICBitmapPaletteTypeCustom));
+			is_converted = true;
+		}
+		
+		THR(bitmap_frame->GetSize(&img_width, &img_height));
+		u32 bits_per_px = dxgi_format_to_bits_per_px(dxgi_format);
+		u32 bytes_per_row = (u32)(img_width * bits_per_px / 8.0f);
+		u32 img_size = bytes_per_row * img_height;
+		
+		out.mem.data = allocate(arena, img_size);
+		
+		if (is_converted)
+			THR(converter->CopyPixels(0, bytes_per_row, img_size, (BYTE *)out.mem.data));
+		else
+			THR(bitmap_frame->CopyPixels(0, bytes_per_row, img_size, (BYTE *)out.mem.data));
+		
+		out.mem.bytes = img_size;
+		out.format = (u32)dxgi_format;
+		out.width = img_width;
+		out.height = img_height;
+		out.bits_per_px = bits_per_px;
+		
+		return out;
+	}
 	
 	internal FILETIME get_file_write_time(const char *name)
 	{

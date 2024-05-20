@@ -6,16 +6,6 @@
 #endif
 #include <dxgi1_6.h>
 
-#ifdef _DEBUG
-inline void THR(HRESULT hr) {
-	AlwaysAssert(SUCCEEDED(hr));
-}
-#else
-inline void THR(HRESULT) {}
-#endif
-		
-#define RELEASE_SAFE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
-
 inline constexpr u8 g_count_backbuffers = 3;
 inline constexpr u32 max_temp_barriers = 32;
 

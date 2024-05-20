@@ -52,6 +52,13 @@ struct Game_Input
 	Game_Controller controllers[2];
 };
 
+using platform_read_png = Image_View(*)(const wchar_t* file_path, Alloc_Arena* arena);
+
+struct Platform_Api
+{
+	platform_read_png read_img;
+};
+
 struct Game_Memory
 {
 	b32 is_initalized;
@@ -61,6 +68,8 @@ struct Game_Memory
 
 	u64 size_transient_storage;
 	void *transient_storage;
+	
+	Platform_Api os_api;
 };
 
 #if GAME_INTERNAL

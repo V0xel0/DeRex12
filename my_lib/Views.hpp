@@ -16,6 +16,15 @@ struct Memory_View
 	u32 stride;
 };
 
+struct Image_View
+{
+	Memory_View mem;
+	u32 format;
+	u32 width;
+	u32 height;
+	u32 bits_per_px;
+};
+
 template<typename T>
 struct Array_View
 {

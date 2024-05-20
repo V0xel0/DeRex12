@@ -37,6 +37,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	HWND win_handle = Win32::create_window(1280, 720, "DeRex12");
 	auto&& [width, height] = Win32::get_window_client_dims(win_handle);
 	
+	CoInitialize(NULL);
+	THR(CoCreateInstance(CLSID_WICImagingFactory, 0, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&Win32::wic_factory)));
+	
 	Alloc_Arena platform_arena
 	{
 		.max_size = MiB(2150),
@@ -113,6 +116,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 		game_window.is_closed = Win32::g_is_running ? false : true;
 		game_window.time_ms = Win32::get_elapsed_ms_here(clock, ticks_loop_start);
+		
+		game_memory.os_api.read_img = &Win32::load_img;
 		
 		if (Win32::g_is_running)
 		{
