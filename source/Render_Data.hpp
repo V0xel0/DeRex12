@@ -17,6 +17,7 @@ struct Data_To_RHI
 {
 	Memory_View st_verts;
 	Memory_View st_indices;
+	Memory_View st_uvs;
 	
 	Image_View st_albedo;
 	

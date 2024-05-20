@@ -10,6 +10,8 @@ struct Draw_Ids
 {
 	u32 pos_id;
 	u32 ind_id;
+	u32 uv_id;
+	u32 albedo_id;
 };
 
 
@@ -17,6 +19,11 @@ struct Draw_Ids
 struct Vertex
 {
 	Vec3 position;
+};
+
+struct Attributes
+{
+	Vec2 uv;
 };
 
 struct Constant_Data_Frame

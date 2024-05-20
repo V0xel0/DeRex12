@@ -130,6 +130,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		// Sending mesh geometric data to RHI
 		data_to_rhi->st_verts = level_geo.positions;
 		data_to_rhi->st_indices = level_geo.indices;
+		data_to_rhi->st_uvs = level_geo.uvs;
 		data_to_rhi->st_albedo = level_tex_albedo;
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
@@ -202,9 +203,9 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		                                                   (f32)window->width/window->height, 
 		                                                   0.1f, 
 		                                                   100.0f);
-		lib::Mat4 mat_model = mat_trans * mat_scale;
+		lib::Mat4 mat_model = mat_trans * mat_rotation  * mat_scale;
 		
-		f32 pulse = (f32)(std::sin((f32)window->time_ms / 300) + 1) / 2;
+		f32 pulse = 1;
 		
 		// Pushing data
 		{

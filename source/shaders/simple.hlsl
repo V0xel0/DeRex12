@@ -3,7 +3,7 @@
 
 #define RootSignatureBasic \
 "RootFlags(CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED), " \
-"RootConstants(b0, num32BitConstants=2, visibility = SHADER_VISIBILITY_ALL), " \
+"RootConstants(b0, num32BitConstants=4, visibility = SHADER_VISIBILITY_ALL), " \
 	"CBV(b1), " \
 	"CBV(b2, visibility = SHADER_VISIBILITY_PIXEL)," \
 "StaticSampler(" \
@@ -22,7 +22,7 @@ ConstantBuffer<Constant_Data_Frame>	cb_per_frame 	: register(b2);
 struct PSInput
 {
 	float4 pos_ndc : SV_POSITION;
-	float4 color : COLOR;
+	float2 uv : TEXCOORD;
 };
 
 [RootSignature(RootSignatureBasic)]
@@ -30,8 +30,9 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 {
 	PSInput result;
  
-	Buffer<u16> indices_buffer 					= ResourceDescriptorHeap[cb_draw_ids.ind_id];
-	StructuredBuffer<Vertex> pos_buffer = ResourceDescriptorHeap[cb_draw_ids.pos_id];
+	Buffer<u16> indices_buffer 							= ResourceDescriptorHeap[cb_draw_ids.ind_id];
+	StructuredBuffer<Vertex> pos_buffer 		= ResourceDescriptorHeap[cb_draw_ids.pos_id];
+	StructuredBuffer<Attributes> uv_buffer 	= ResourceDescriptorHeap[cb_draw_ids.uv_id];
 	
 	u32 vert_index = indices_buffer[vertex_id];
 	float4 pos = float4(pos_buffer[vert_index].position, 1.0f);
@@ -40,7 +41,7 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 	const float4x4 obj_to_clip = mul(cb_per_draw.world_to_clip, obj_to_world);
 	
 	result.pos_ndc = mul(obj_to_clip, pos);
-	//result.color = pos_buffer[vert_index].color;
+	result.uv = uv_buffer[vert_index].uv;
  
 	return result;
 }
@@ -48,6 +49,8 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 [RootSignature(RootSignatureBasic)]
 float4 PSMain(PSInput input) : SV_TARGET
 {
+	Texture2D<float4>albedo_tex = ResourceDescriptorHeap[cb_draw_ids.albedo_id];
+	float4 col = albedo_tex.Sample(sam_linear, input.uv);
 	//return input.color;
-	return cb_per_frame.light_col;
+	return cb_per_frame.light_col * col;
 }

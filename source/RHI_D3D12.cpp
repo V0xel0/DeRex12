@@ -48,7 +48,7 @@ inline void THR(HRESULT) {}
 namespace DX
 {
 	internal constexpr u32 g_alloc_alignment = 512;
-	internal constexpr u64 g_upload_heap_max_size = MiB(20);
+	internal constexpr u64 g_upload_heap_max_size = MiB(50);
 	internal constexpr u64 g_max_count_cbv_srv_uav_descriptors = 128;
 	
 	internal RHI_State g_state{};
@@ -538,6 +538,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	
 	auto& vertices_static = g_state.vertices_static;
 	auto& indices_static 	= g_state.indices_static;
+	auto& uvs_static = g_state.uvs_static;
 	auto& tex_albedo_static 	= g_state.tex_albedo_static;
 	auto& static_pso 			= g_state.static_pso;
 	
@@ -555,6 +556,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																																					data_from_app->st_albedo.width, 
 																																					data_from_app->st_albedo.height));
 		push_texture_to_default(device, ctx, &tex_albedo_static, upload_heap, data_from_app->st_albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		
+		uvs_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_uvs.bytes));
+		push_to_default(ctx, &uvs_static, upload_heap, data_from_app->st_uvs, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		
 		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
@@ -686,6 +690,17 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																											.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																											.Texture2D = {.MipLevels = 1}
 																										});
+		
+		Resource_View view_attrs = push_descriptor(device, cbv_srv_uav_heap, &uvs_static, 
+																							 {
+																								 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+																								 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																								 .Buffer = {
+																													 .FirstElement = 0,
+																													 .NumElements = (u32)uvs_static.desc.Width / sizeof(Vec2),
+																													 .StructureByteStride = sizeof(Vec2),
+																													 .Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
+																								 }});
 		// Populate command list
 		{
 			// Default state
@@ -701,7 +716,11 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(2, cbv_gpu_addr_frame);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
 				ctx->cmd_list->SetGraphicsRoot32BitConstants(0, sizeof(Draw_Ids) / sizeof(u32),
-																										 get_cptr(Draw_Ids{view_verts.id, view_indices.id}), 0);
+																										 get_cptr(Draw_Ids{view_verts.id, 
+																										 view_indices.id, 
+																										 view_attrs.id,
+																										 view_tex_albedo.id
+																										}), 0);
 				
 				ctx->cmd_list->DrawInstanced(view_indices.desc.Buffer.NumElements, 1, 0, 0);
 			}

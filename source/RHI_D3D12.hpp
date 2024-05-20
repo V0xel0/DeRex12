@@ -106,6 +106,7 @@ struct RHI_State
 	// Data State
 	GPU_Resource vertices_static;
 	GPU_Resource indices_static;
+	GPU_Resource uvs_static; // temporary
 	GPU_Resource tex_albedo_static;
 	Pipeline static_pso;
 };
