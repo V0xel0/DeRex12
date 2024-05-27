@@ -52,11 +52,11 @@ struct Game_Input
 	Game_Controller controllers[2];
 };
 
-using platform_read_png = Image_View(*)(const wchar_t* file_path, Alloc_Arena* arena);
+using platform_read_img = Image_View(*)(const wchar_t*, Alloc_Arena*, b32);
 
 struct Platform_Api
 {
-	platform_read_png read_img;
+	platform_read_img read_img;
 };
 
 struct Game_Memory

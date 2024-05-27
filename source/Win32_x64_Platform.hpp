@@ -455,18 +455,16 @@ namespace Win32
 	}
 #endif
 	
-	//TODO: maybe move this loading to RHI?
-	//TODO: handle sRGB
-	DXGI_FORMAT wic_format_to_dxgi(WICPixelFormatGUID& wicFormatGUID)
+	DXGI_FORMAT wic_format_to_dxgi(WICPixelFormatGUID& wicFormatGUID, b32 is_srgb)
 	{
 		DXGI_FORMAT out = DXGI_FORMAT_UNKNOWN;
 		
     if (wicFormatGUID == GUID_WICPixelFormat128bppRGBAFloat) out = DXGI_FORMAT_R32G32B32A32_FLOAT;
     else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBAHalf) out = DXGI_FORMAT_R16G16B16A16_FLOAT;
     else if (wicFormatGUID == GUID_WICPixelFormat64bppRGBA) out = DXGI_FORMAT_R16G16B16A16_UNORM;
-    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA) out = DXGI_FORMAT_R8G8B8A8_UNORM;
-    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGRA) out = DXGI_FORMAT_B8G8R8A8_UNORM;
-    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGR) out = DXGI_FORMAT_B8G8R8X8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA) out = is_srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGRA) out = is_srgb ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
+    else if (wicFormatGUID == GUID_WICPixelFormat32bppBGR)  out = is_srgb ? DXGI_FORMAT_B8G8R8X8_UNORM_SRGB : DXGI_FORMAT_B8G8R8X8_UNORM;
     else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA1010102XR) out = DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM;
 
     else if (wicFormatGUID == GUID_WICPixelFormat32bppRGBA1010102) out = DXGI_FORMAT_R10G10B10A2_UNORM;
@@ -490,9 +488,9 @@ namespace Win32
     if (dxgiFormat == DXGI_FORMAT_R32G32B32A32_FLOAT) out = 128;
     else if (dxgiFormat == DXGI_FORMAT_R16G16B16A16_FLOAT) out = 64;
     else if (dxgiFormat == DXGI_FORMAT_R16G16B16A16_UNORM) out = 64;
-    else if (dxgiFormat == DXGI_FORMAT_R8G8B8A8_UNORM) out = 32;
-    else if (dxgiFormat == DXGI_FORMAT_B8G8R8A8_UNORM) out = 32;
-    else if (dxgiFormat == DXGI_FORMAT_B8G8R8X8_UNORM) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || dxgiFormat == DXGI_FORMAT_R8G8B8A8_UNORM ) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || dxgiFormat == DXGI_FORMAT_B8G8R8A8_UNORM) out = 32;
+    else if (dxgiFormat == DXGI_FORMAT_B8G8R8X8_UNORM_SRGB || dxgiFormat == DXGI_FORMAT_B8G8R8X8_UNORM) out = 32;
     else if (dxgiFormat == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM) out = 32;
 
     else if (dxgiFormat == DXGI_FORMAT_R10G10B10A2_UNORM) out = 32;
@@ -561,7 +559,7 @@ namespace Win32
 		return out;
 	}
 	
-	Image_View load_img(const wchar_t* file_path, Alloc_Arena* arena)
+	Image_View load_img_dxgi_compatible(const wchar_t* file_path, Alloc_Arena* arena, b32 is_srgb = true)
 	{
 		DXGI_FORMAT dxgi_format = DXGI_FORMAT_UNKNOWN;
 		u32 img_width		= 0;
@@ -582,12 +580,12 @@ namespace Win32
     THR(bitmap_frame->GetPixelFormat(&pixel_format));
 		THR(Win32::wic_factory->CreateFormatConverter(&converter));
 		
-		dxgi_format = wic_format_to_dxgi(pixel_format);
+		dxgi_format = wic_format_to_dxgi(pixel_format, is_srgb);
 		
 		if (dxgi_format == DXGI_FORMAT_UNKNOWN)
 		{
 			WICPixelFormatGUID new_format = find_compatible_wic(pixel_format);
-			dxgi_format = wic_format_to_dxgi(new_format);
+			dxgi_format = wic_format_to_dxgi(new_format, is_srgb);
 			BOOL can_convert = false;
 			THR(converter->CanConvert(pixel_format, new_format, &can_convert));
 			AlwaysAssert(can_convert && "Cant convert!");

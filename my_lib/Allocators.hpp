@@ -212,7 +212,7 @@ inline void reset_list(Alloc_Pool *pool)
 {
 	u64 block_count = pool->max_size / pool->block_size;
 
-	for (u64 i = 0; i < block_count; i++)
+	for (u64 i = block_count; i--;) // changed to go from the end to beginning - head is at 0 offset
 	{
 		Pool_Free_Node *node = get_node(pool, i);
 		node->next = pool->head_block;
@@ -221,7 +221,7 @@ inline void reset_list(Alloc_Pool *pool)
 }
 
 [[nodiscard]]
-inline Alloc_Pool create_pool(byte *const mem_buffer, const u64 max_size, const u64 block_size, const u64 alignment)
+inline Alloc_Pool create_pool(byte *const mem_buffer, const u64 max_size, const u64 block_size, const u64 alignment = alignof(u64))
 {
 	assert(block_size <= max_size && "Block is bigger than max size!");
 	assert(block_size >= sizeof(Pool_Free_Node) && "Block size is too small - minimum size is 8 bytes!");
@@ -239,7 +239,7 @@ inline Alloc_Pool create_pool(byte *const mem_buffer, const u64 max_size, const 
 }
 
 [[nodiscard]]
-inline Alloc_Pool pool_from_allocator(auto* allocator, const u64 max_size_bytes, const u64 block_size, const u64 alignment)
+inline Alloc_Pool pool_from_allocator(auto* allocator, const u64 max_size_bytes, const u64 block_size, const u64 alignment = alignof(u64))
 {
 	return create_pool((byte *)allocate(allocator, max_size_bytes), max_size_bytes, block_size, alignment);
 }

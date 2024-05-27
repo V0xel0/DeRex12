@@ -117,7 +117,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		game_window.is_closed = Win32::g_is_running ? false : true;
 		game_window.time_ms = Win32::get_elapsed_ms_here(clock, ticks_loop_start);
 		
-		game_memory.os_api.read_img = &Win32::load_img;
+		game_memory.os_api.read_img = &Win32::load_img_dxgi_compatible;
 		
 		if (Win32::g_is_running)
 		{

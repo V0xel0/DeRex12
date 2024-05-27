@@ -125,7 +125,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		// Loading mesh
 		//TODO: temporarily not holding it anywhere
 		Geometry level_geo = load_geometry_from_gltf("../assets/meshes/avocado/Avocado.gltf", &app_state->arena_assets, &app_state->arena_frame);
-		Image_View level_tex_albedo = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_baseColor.png", &app_state->arena_assets);
+		Image_View level_tex_albedo = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_baseColor.png", &app_state->arena_assets, true);
 		
 		// Sending mesh geometric data to RHI
 		data_to_rhi->st_verts = level_geo.positions;
