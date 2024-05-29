@@ -52,11 +52,23 @@ namespace DX
 } // namespace DX
 
 // external structures
-struct GPU_Resource
+struct Buffer
 {
 	ID3D12Resource* ptr;
 	D3D12_RESOURCE_STATES state;
-	D3D12_RESOURCE_DESC desc;
+	u32 size_bytes;
+	u32 stride_bytes;
+};
+
+struct Texture
+{
+	ID3D12Resource* ptr;
+	D3D12_RESOURCE_STATES state;
+	DXGI_FORMAT format;
+	u32 width;
+	u32 height;
+	u32 bytes_per_px;
+	u32 mips;
 };
 
 struct Pipeline
@@ -89,7 +101,7 @@ struct RHI_State
 	ID3D12Resource* rtv_texture[g_count_backbuffers]{};
 	DX::Descriptor_Heap rtv_heap;
 	
-	GPU_Resource dsv_texture;
+	Texture dsv_texture;
 	DX::Descriptor_Heap dsv_heap;
 	
 	DX::Upload_Heap upload_heaps[g_count_backbuffers];
@@ -104,9 +116,9 @@ struct RHI_State
 	u32 height;
 	
 	// Data State
-	GPU_Resource vertices_static;
-	GPU_Resource indices_static;
-	GPU_Resource uvs_static; // temporary
-	GPU_Resource tex_albedo_static;
+	Buffer vertices_static;
+	Buffer indices_static;
+	Buffer uvs_static; // temporary
+	Texture albedo_static;
 	Pipeline static_pso;
 };

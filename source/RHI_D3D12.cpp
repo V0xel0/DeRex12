@@ -181,7 +181,7 @@ namespace DX
 	}
 	
 	[[nodiscard]]
-	D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Upload_Heap* heap, Memory_View mem)
+	internal D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Upload_Heap* heap, Memory_View mem)
 	{
 		const auto [cpu_addr, gpu_addr] = allocate_to_upload_heap(heap, mem.bytes);
 		memcpy(cpu_addr, mem.data, mem.bytes);
@@ -195,13 +195,47 @@ namespace DX
 	}
 	
 	//TODO: return handle to resource
-	GPU_Resource allocate_to_default(ID3D12Device2* device, D3D12_RESOURCE_DESC desc)
+	internal Buffer create_buffer(ID3D12Device2* device, Memory_View mem)
 	{
-		GPU_Resource out{.desc = desc};
+		Buffer out{.size_bytes = mem.bytes, .stride_bytes = mem.stride};
 		
+		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(mem.bytes);
 		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 																				D3D12_HEAP_FLAG_NONE,
-																				&out.desc,
+																				&desc,
+																				D3D12_RESOURCE_STATE_COMMON,
+																				nullptr,
+																				IID_PPV_ARGS(&out.ptr)));
+		
+		return out;
+	}
+	
+	internal u32 calc_mips(u32 width, u32 height)
+	{
+		u32 out = 1;
+		// logic "or" both dimensions and divide by next powers of 2 by shifting right
+		while ((width | height) >> out)
+			++out;
+		
+		return out;
+	}
+	
+	internal Texture create_texture(ID3D12Device2* device, Image_View img, u16 depth = 1, u16 mips = 0)
+	{
+		assert(depth == 1 || depth == 6);
+		
+		Texture out {
+			.format = (DXGI_FORMAT)img.format,
+			.width = img.width, 
+			.height = img.height, 
+			.bytes_per_px = (u32)(img.bits_per_px / 8),
+			.mips = (mips > 0) ? mips : calc_mips(img.width, img.height)
+		};
+		
+		D3D12_RESOURCE_DESC desc = 	CD3DX12_RESOURCE_DESC::Tex2D(out.format, out.width, out.height, depth);
+		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+																				D3D12_HEAP_FLAG_NONE,
+																				&desc,
 																				D3D12_RESOURCE_STATE_COMMON,
 																				nullptr,
 																				IID_PPV_ARGS(&out.ptr)));
@@ -210,19 +244,19 @@ namespace DX
 	}
 	
 	//TODO: take handle to resource
-	void push_to_default(Context* ctx, GPU_Resource* res, Upload_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state)
+	internal void push_to_default(Context* ctx, Buffer* buf, Upload_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state)
 	{
 		auto gpu_h = push_to_upload_heap(upload, mem);
 		u64 aligned_size = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
-		ctx->cmd_list->CopyBufferRegion(res->ptr, 0, upload->heap, upload->heap_arena.prev_offset, aligned_size);
+		ctx->cmd_list->CopyBufferRegion(buf->ptr, 0, upload->heap, upload->heap_arena.prev_offset, aligned_size);
 		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
-																																						 (res->ptr, 
+																																						 (buf->ptr, 
 																																							D3D12_RESOURCE_STATE_COPY_DEST, 
 																																							end_state)));
-		res->state = end_state;
+		buf->state = end_state;
 	} 
 	
-	void push_texture_to_default(ID3D12Device2* device, Context* ctx, GPU_Resource* res, Upload_Heap* upload, Image_View imv, D3D12_RESOURCE_STATES end_state)
+	internal void push_texture_to_default(ID3D12Device2* device, Context* ctx, Texture* tex, Upload_Heap* upload, Image_View imv, D3D12_RESOURCE_STATES end_state)
 	{
 		auto gpu_h = push_to_upload_heap(upload, imv.mem);
 		u64 aligned_size = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
@@ -230,12 +264,13 @@ namespace DX
 		// Probably not need as data in Image_View should be enough
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
 		u64 required_size;
-		device->GetCopyableFootprints(&res->desc, 0, 1, 0, &layout, NULL, NULL, &required_size);
+		auto desc = tex->ptr->GetDesc();
+		device->GetCopyableFootprints(&desc, 0, 1, 0, &layout, NULL, NULL, &required_size);
 		layout.Offset = upload->heap_arena.prev_offset;
 	
 		ctx->cmd_list->CopyTextureRegion(
 			get_cptr<D3D12_TEXTURE_COPY_LOCATION>({
-				.pResource = res->ptr,
+				.pResource = tex->ptr,
 				.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
 				.SubresourceIndex = 0
 		}),0,0,0,
@@ -245,10 +280,10 @@ namespace DX
 				.PlacedFootprint = layout
 		}), nullptr );
 		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
-																																							(res->ptr, 
+																																							(tex->ptr, 
 																																							 D3D12_RESOURCE_STATE_COPY_DEST, 
 																																							 end_state)));
-		res->state = end_state;
+		tex->state = end_state;
 	} 
 	
 	[[nodiscard]]
@@ -292,7 +327,7 @@ namespace DX
 	}
 	
 	//TODO: take handle to resource
-	Resource_View push_descriptor(ID3D12Device2* device, Descriptor_Heap* heap, GPU_Resource* resource, D3D12_SHADER_RESOURCE_VIEW_DESC desc)
+	internal Resource_View push_descriptor(ID3D12Device2* device, Descriptor_Heap* heap, ID3D12Resource* res, D3D12_SHADER_RESOURCE_VIEW_DESC desc)
 	{
 		Resource_View out {};
 				
@@ -300,7 +335,7 @@ namespace DX
 		out.id = heap->count - 1;
 		out.desc = desc;
 	
-		device->CreateShaderResourceView(resource->ptr, &out.desc, srv_h.h_cpu);
+		device->CreateShaderResourceView(res, &out.desc, srv_h.h_cpu);
 				
 		return out;
 	}
@@ -539,7 +574,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& vertices_static = g_state.vertices_static;
 	auto& indices_static 	= g_state.indices_static;
 	auto& uvs_static = g_state.uvs_static;
-	auto& tex_albedo_static 	= g_state.tex_albedo_static;
+	auto& albedo_static 	= g_state.albedo_static;
 	auto& static_pso 			= g_state.static_pso;
 	
 	auto* upload_heap = &g_state.upload_heaps[frame_index];
@@ -547,20 +582,18 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	// Static data upload
 	if (data_from_app->is_new_static)
 	{
-		vertices_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_verts.bytes));
+		// Create & push static buffers
+		vertices_static = create_buffer(device, data_from_app->st_verts);
 		push_to_default(ctx, &vertices_static, upload_heap, data_from_app->st_verts, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		indices_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_indices.bytes));
+		indices_static = create_buffer(device, data_from_app->st_indices);
 		push_to_default(ctx, &indices_static, upload_heap, data_from_app->st_indices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		tex_albedo_static = allocate_to_default(device, 
-																						 CD3DX12_RESOURCE_DESC::Tex2D((DXGI_FORMAT)data_from_app->st_albedo.format, 
-																																					data_from_app->st_albedo.width, 
-																																					data_from_app->st_albedo.height));
-		push_texture_to_default(device, ctx, &tex_albedo_static, upload_heap, data_from_app->st_albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		
-		uvs_static = allocate_to_default(device, CD3DX12_RESOURCE_DESC::Buffer(data_from_app->st_uvs.bytes));
+		uvs_static = create_buffer(device, data_from_app->st_uvs);
 		push_to_default(ctx, &uvs_static, upload_heap, data_from_app->st_uvs, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		
-		static_pso 			= create_basic_pipeline(device, data_from_app->shader_path);
+		// Create & push static textures
+		albedo_static = create_texture(device, data_from_app->st_albedo);
+		push_texture_to_default(device, ctx, &albedo_static, upload_heap, data_from_app->st_albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		// Create static shaders & psos
+		static_pso = create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);
 	}
 	
@@ -609,16 +642,19 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				
 		// Create/Update DSV, depth texture
 		{
-			dsv_texture.desc = CD3DX12_RESOURCE_DESC::Tex2D
+			auto desc = CD3DX12_RESOURCE_DESC::Tex2D
 								(DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 			dsv_texture.state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+			dsv_texture.format = desc.Format;
+			dsv_texture.width = width;
+			dsv_texture.height = height;
 				
 			THR(device->CreateCommittedResource(
 				get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 				D3D12_HEAP_FLAG_NONE,
-				&dsv_texture.desc,
+				&desc,
 				dsv_texture.state,
-				get_cptr(CD3DX12_CLEAR_VALUE(dsv_texture.desc.Format, 1.0f, 0)),
+				get_cptr(CD3DX12_CLEAR_VALUE(desc.Format, 1.0f, 0)),
 				IID_PPV_ARGS(&dsv_texture.ptr)
 			));
 					
@@ -664,41 +700,41 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, data_from_app->cb_frame);
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, data_from_app->cb_draw);
 
-		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, &vertices_static, 
+		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, vertices_static.ptr, 
 																								 {
 																										.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 																										.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																										.Buffer = {
 																															.FirstElement = 0,
-																															.NumElements = (u32)vertices_static.desc.Width / sizeof(Vertex),
-																															.StructureByteStride = sizeof(Vertex),
+																															.NumElements = (u32)vertices_static.size_bytes / vertices_static.stride_bytes,
+																															.StructureByteStride = vertices_static.stride_bytes,
 																															.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
 																									}});
-		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, &indices_static,
+		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, indices_static.ptr,
 																								 {
 																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R16_UINT, //SYNC THIS!
 																									 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 																									 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																									 .Buffer = {
-																															.NumElements = (u32)indices_static.desc.Width / 2 // SYNC THIS!
+																															.NumElements = (u32)indices_static.size_bytes / indices_static.stride_bytes
 																									}});
 		
-		Resource_View view_tex_albedo = push_descriptor(device, cbv_srv_uav_heap, &tex_albedo_static, 
+		Resource_View view_tex_albedo = push_descriptor(device, cbv_srv_uav_heap, albedo_static.ptr, 
 																										{
-																											.Format = tex_albedo_static.desc.Format,
+																											.Format = albedo_static.format,
 																											.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
 																											.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																											.Texture2D = {.MipLevels = 1}
 																										});
 		
-		Resource_View view_attrs = push_descriptor(device, cbv_srv_uav_heap, &uvs_static, 
+		Resource_View view_attrs = push_descriptor(device, cbv_srv_uav_heap, uvs_static.ptr, 
 																							 {
 																								 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 																								 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																								 .Buffer = {
 																													 .FirstElement = 0,
-																													 .NumElements = (u32)uvs_static.desc.Width / sizeof(Vec2),
-																													 .StructureByteStride = sizeof(Vec2),
+																													 .NumElements = (u32)uvs_static.size_bytes / uvs_static.stride_bytes,
+																													 .StructureByteStride = uvs_static.stride_bytes,
 																													 .Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
 																								 }});
 		// Populate command list
