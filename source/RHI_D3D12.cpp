@@ -50,6 +50,7 @@ namespace DX
 	internal constexpr u32 g_alloc_alignment = 512;
 	internal constexpr u64 g_upload_heap_max_size = MiB(50);
 	internal constexpr u64 g_max_count_cbv_srv_uav_descriptors = 128;
+	internal constexpr u32 g_max_count_texture_subresource = 72; // max: 12mips for cubemap
 	
 	internal RHI_State g_state{};
 		
@@ -180,7 +181,6 @@ namespace DX
 		return out;
 	}
 	
-	[[nodiscard]]
 	internal D3D12_GPU_VIRTUAL_ADDRESS push_to_upload_heap(Upload_Heap* heap, Memory_View mem)
 	{
 		const auto [cpu_addr, gpu_addr] = allocate_to_upload_heap(heap, mem.bytes);
@@ -210,14 +210,14 @@ namespace DX
 		return out;
 	}
 	
-	internal u32 calc_mips(u32 width, u32 height)
+	internal u16 calc_mips(u32 width, u32 height)
 	{
 		u32 out = 1;
 		// logic "or" both dimensions and divide by next powers of 2 by shifting right
 		while ((width | height) >> out)
 			++out;
 		
-		return out;
+		return (u16)out;
 	}
 	
 	internal Texture create_texture(ID3D12Device2* device, Image_View img, u16 depth = 1, u16 mips = 0)
@@ -228,11 +228,10 @@ namespace DX
 			.format = (DXGI_FORMAT)img.format,
 			.width = img.width, 
 			.height = img.height, 
-			.bytes_per_px = (u32)(img.bits_per_px / 8),
-			.mips = (mips > 0) ? mips : calc_mips(img.width, img.height)
 		};
 		
-		D3D12_RESOURCE_DESC desc = 	CD3DX12_RESOURCE_DESC::Tex2D(out.format, out.width, out.height, depth);
+		u16 mip_levels = (mips > 0) ? mips : calc_mips(img.width, img.height);
+		D3D12_RESOURCE_DESC desc = 	CD3DX12_RESOURCE_DESC::Tex2D(out.format, out.width, out.height, depth, mip_levels);
 		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 																				D3D12_HEAP_FLAG_NONE,
 																				&desc,
@@ -256,29 +255,55 @@ namespace DX
 		buf->state = end_state;
 	} 
 	
-	internal void push_texture_to_default(ID3D12Device2* device, Context* ctx, Texture* tex, Upload_Heap* upload, Image_View imv, D3D12_RESOURCE_STATES end_state)
+	internal void push_texture_to_default(ID3D12Device2* device, Context* ctx, Texture* tex, 
+																Upload_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state,
+																u32 num_subresources = 0)
 	{
-		auto gpu_h = push_to_upload_heap(upload, imv.mem);
-		u64 aligned_size = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
-	
-		// Probably not need as data in Image_View should be enough
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
-		u64 required_size;
+		// Assumed that subresources offsets and row sizes in mem are the same as from Footprints and no subresources depth
+		u64 required_bytes = 0;
+		u32 rows[g_max_count_texture_subresource]{};
+		u64 row_bytes[g_max_count_texture_subresource]{};
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts[g_max_count_texture_subresource]{};
 		auto desc = tex->ptr->GetDesc();
-		device->GetCopyableFootprints(&desc, 0, 1, 0, &layout, NULL, NULL, &required_size);
-		layout.Offset = upload->heap_arena.prev_offset;
+		u32 count_subresources = (num_subresources > 0) ? num_subresources : desc.MipLevels * desc.DepthOrArraySize;
 	
+		device->GetCopyableFootprints(&desc, 0, count_subresources, 0, layouts, rows, row_bytes, &required_bytes);
+		
+		//TODO: more complete handling by Tardiff & MJP https://alextardif.com/D3D11To12P3.html
+		u64 dst_res_start_offset = 0;
+		for(u32 subres_i = 0; subres_i < count_subresources; ++subres_i)
+		{
+			byte* src_subres = (byte*)(mem.data) + layouts[subres_i].Offset;
+			for(u32 row_i = 0; row_i < rows[subres_i]; ++row_i)
+			{
+				byte* src_row = src_subres + row_i * row_bytes[subres_i];
+				push_to_upload_heap(upload, { src_row, row_bytes[subres_i] });
+				u64 allocated_row = upload->heap_arena.curr_offset - upload->heap_arena.prev_offset;
+				manual_offset(&upload->heap_arena, layouts[subres_i].Footprint.RowPitch - allocated_row);
+				
+				// get aligned start of the first subresource in upload
+				if (row_i == 0 && subres_i == 0)
+					dst_res_start_offset = upload->heap_arena.prev_offset;
+			}
+			
+			u64 dst_subres_offset = upload->heap_arena.curr_offset - dst_res_start_offset;
+			manual_offset(&upload->heap_arena, layouts[subres_i].Offset - dst_subres_offset);
+		}
+		
+		//TODO: (change) single CopyTextureRegion starting from first subresource instead of each invidually
+		D3D12_TEXTURE_COPY_LOCATION src{};
+		src.pResource = upload->heap;
+		src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		src.PlacedFootprint = layouts[0];
+		src.PlacedFootprint.Offset = dst_res_start_offset;
+		
 		ctx->cmd_list->CopyTextureRegion(
 			get_cptr<D3D12_TEXTURE_COPY_LOCATION>({
 				.pResource = tex->ptr,
 				.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
 				.SubresourceIndex = 0
 		}),0,0,0,
-			get_cptr<D3D12_TEXTURE_COPY_LOCATION>({
-				.pResource = upload->heap,
-				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-				.PlacedFootprint = layout
-		}), nullptr );
+			&src, nullptr );
 		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
 																																							(tex->ptr, 
 																																							 D3D12_RESOURCE_STATE_COPY_DEST, 
@@ -590,8 +615,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		uvs_static = create_buffer(device, data_from_app->st_uvs);
 		push_to_default(ctx, &uvs_static, upload_heap, data_from_app->st_uvs, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		// Create & push static textures
-		albedo_static = create_texture(device, data_from_app->st_albedo);
-		push_texture_to_default(device, ctx, &albedo_static, upload_heap, data_from_app->st_albedo, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		albedo_static = create_texture(device, data_from_app->st_albedo, 1, 1);
+		push_texture_to_default(device, ctx, &albedo_static, upload_heap, data_from_app->st_albedo.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		// Create static shaders & psos
 		static_pso = create_basic_pipeline(device, data_from_app->shader_path);
 		execute_and_wait(ctx);

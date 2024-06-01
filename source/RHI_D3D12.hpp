@@ -56,7 +56,7 @@ struct Buffer
 {
 	ID3D12Resource* ptr;
 	D3D12_RESOURCE_STATES state;
-	u32 size_bytes;
+	u64 size_bytes;
 	u32 stride_bytes;
 };
 
@@ -67,8 +67,6 @@ struct Texture
 	DXGI_FORMAT format;
 	u32 width;
 	u32 height;
-	u32 bytes_per_px;
-	u32 mips;
 };
 
 struct Pipeline

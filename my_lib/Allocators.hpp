@@ -37,6 +37,13 @@ inline Alloc_Arena arena_from_allocator(auto* allocator, const u64 max_size)
 	return { max_size, (byte *)allocate(allocator, max_size) };
 }
 
+inline u64 manual_offset(Alloc_Arena *arena, u64 offset)
+{
+	assert( ( (arena->curr_offset + offset) <= arena->max_size) && "No more memory!" );
+	arena->curr_offset += offset;
+	return arena->curr_offset;
+}
+
 [[nodiscard]]
 inline void *allocate(Alloc_Arena *arena, const u64 size_bytes, const u64 alignment = alignof(u64))
 {

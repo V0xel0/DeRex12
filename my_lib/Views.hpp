@@ -12,7 +12,7 @@
 struct Memory_View
 {
 	void* data;
-	u32 bytes;
+	u64 bytes;
 	u32 stride;
 };
 
