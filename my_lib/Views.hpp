@@ -5,7 +5,7 @@
 
 #include "Utils.hpp"
 
-// Version 0.0.4 18.05.2024
+// Version 0.0.41 02.06.2024
 
 //TODO: Extend String_View implementation
 
@@ -114,6 +114,11 @@ struct Array_View
 	{
 		assert(data != nullptr);
 		memset(data, 0, sizeof(T) * size);
+	}
+	
+	Memory_View get_memory_view()
+	{
+		return {data, size*sizeof(T), sizeof(T)};
 	}
 };
 

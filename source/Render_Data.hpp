@@ -13,13 +13,21 @@ struct Game_Window
 	b32 is_closed;
 };
 
+struct Geometry
+{
+	Memory_View indices;
+	Memory_View positions;
+	Array_View<Attributes> attributes;
+};
+
 struct Data_To_RHI
 {
-	Memory_View st_verts;
-	Memory_View st_indices;
-	Memory_View st_uvs;
+	Geometry st_geo;
 	
 	Image_View st_albedo;
+	Image_View st_normal;
+	Image_View st_roughness;
+	Image_View st_enviro;
 	
 	const wchar_t* shader_path;
 	b32 is_new_static;

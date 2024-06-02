@@ -116,7 +116,7 @@ struct RHI_State
 	// Data State
 	Buffer vertices_static;
 	Buffer indices_static;
-	Buffer uvs_static; // temporary
+	Buffer attrs_static; // temporary
 	Texture albedo_static;
 	Pipeline static_pso;
 };

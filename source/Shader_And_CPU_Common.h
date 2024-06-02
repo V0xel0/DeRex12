@@ -10,7 +10,7 @@ struct Draw_Ids
 {
 	u32 pos_id;
 	u32 ind_id;
-	u32 uv_id;
+	u32 attr_id;
 	u32 albedo_id;
 };
 
@@ -21,9 +21,13 @@ struct Vertex
 	Vec3 position;
 };
 
+// because of Vec4 in C++ it is 16bytes aligned so have to extend all to Vec4 for now in order to
+// have proper alignment with hlsl
 struct Attributes
 {
-	Vec2 uv;
+	Vec4 tangent;
+	Vec4 normal;
+	Vec4 uv;
 };
 
 struct Constant_Data_Frame

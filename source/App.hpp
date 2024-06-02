@@ -17,16 +17,6 @@ struct Camera
 	f32 fov;
 };
 
-struct Geometry
-{
-	Memory_View indices;
-	Memory_View positions;
-	Memory_View uvs;
-	Memory_View normals;
-	Memory_View tangents;
-	Memory_View colors;
-};
-
 struct App_State
 {
 	Alloc_Arena arena_persist;

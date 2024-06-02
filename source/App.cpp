@@ -25,15 +25,15 @@ inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 spee
 	return out + dir * speed;
 }
 
-Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_save, Alloc_Arena* arena_temp)
+Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_push, Alloc_Arena* arena_temp)
 {
-	assert(arena_to_save != arena_temp && "Same arenas");
+	assert(arena_to_push != arena_temp && "Same arenas");
 	
 	Geometry out{};
 			
 	arena_start_temp(arena_temp);
 	auto d = defer([&] { arena_end_temp(arena_temp); });
-			
+	
 	cgltf_options options = {.memory = {
 																		 .alloc_func = &arena_alloc_for_lib,
 																		 .free_func = &arena_reset_for_lib, 
@@ -46,9 +46,9 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_sa
 	result = cgltf_load_buffers(&options, data, file_path);
 	assert(result == cgltf_result_success);
 			
-	auto copy_data = [arena_to_save](Memory_View& mem, void* src, u32 size, u32 stride)
+	auto copy_data = [](Alloc_Arena* arena, Memory_View& mem, void* src, u32 size, u32 stride)
 										{
-											mem.data = allocate(arena_to_save, size);
+									 		mem.data = allocate(arena, size);
 											mem.bytes = size;  
 											mem.stride = stride; // or stride from bufferView?
 											memcpy(mem.data, src, mem.bytes);
@@ -60,10 +60,13 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_sa
 		auto src_data = (byte *)acc->buffer_view->buffer->data + acc->offset + acc->buffer_view->offset;
 		u32 size_bytes = (u32)acc->buffer_view->size; // shouldnt this be subtracted with offset from accesor?
 				
-		copy_data(out.indices, src_data, size_bytes, (u32)acc->stride);
+		copy_data(arena_to_push, out.indices, src_data, size_bytes, (u32)acc->stride);
 	}
 			
 	// Copy attributes
+	Memory_View temp_normals{};
+	Memory_View temp_tangents{};
+	Memory_View temp_uvs{};
 	{
 		u32 count_attributes = (u32)data->meshes[0].primitives[0].attributes_count;
 		for (u32 attr_i = 0; attr_i < count_attributes; ++attr_i)
@@ -72,28 +75,42 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_sa
 			cgltf_accessor* acc = attribute->data;
 			auto src_data = (byte *)acc->buffer_view->buffer->data + acc->offset + acc->buffer_view->offset;
 			u32 size_bytes = (u32)acc->buffer_view->size;
-					
+			
 			if (attribute->type == cgltf_attribute_type_position)
 			{
-				copy_data(out.positions, src_data, size_bytes, (u32)acc->stride);
+				copy_data(arena_to_push, out.positions, src_data, size_bytes, (u32)acc->stride);
 			}
+			// Rest of attributes copied first to intermediate buffers
 			else if (attribute->type == cgltf_attribute_type_normal)
 			{
-				copy_data(out.normals, src_data, size_bytes, (u32)acc->stride);
+				AlwaysAssert(acc->type == cgltf_type_vec3 && acc->component_type == cgltf_component_type_r_32f);
+				copy_data(arena_temp, temp_normals, src_data, size_bytes, (u32)acc->stride);
 			}
 			else if (attribute->type == cgltf_attribute_type_tangent)
 			{
-				copy_data(out.tangents, src_data, size_bytes, (u32)acc->stride);
+				AlwaysAssert(acc->type == cgltf_type_vec4 && acc->component_type == cgltf_component_type_r_32f);
+				copy_data(arena_temp, temp_tangents, src_data, size_bytes, (u32)acc->stride);
 			}
 			else if (attribute->type == cgltf_attribute_type_texcoord)
 			{
-				copy_data(out.uvs, src_data, size_bytes, (u32)acc->stride);
-			}
-			else if (attribute->type == cgltf_attribute_type_color)
-			{
-				copy_data(out.colors, src_data, size_bytes, (u32)acc->stride);
+				AlwaysAssert(acc->type == cgltf_type_vec2 && acc->component_type == cgltf_component_type_r_32f);
+				copy_data(arena_temp, temp_uvs, src_data, size_bytes, (u32)acc->stride);
 			}
 		}
+	}
+	
+	s32 vertex_count = (s32)(out.positions.bytes / out.positions.stride);
+	out.attributes.init(arena_to_push, vertex_count);
+	
+	// Copy rest of attributes to Geometry layout
+	for(u64 v_i = 0; v_i < out.attributes.size; ++v_i)
+	{
+		// casts are "safe" here cause we now the data has this type
+		lib::Vec3 normal = *(lib::Vec3*)((byte *)(temp_normals.data) + v_i * temp_normals.stride);
+		lib::Vec4 tangent = *(lib::Vec4*)((byte *)(temp_tangents.data) + v_i * temp_tangents.stride);
+		lib::Vec2 uv = *(lib::Vec2*)((byte *)(temp_uvs.data) + v_i * temp_uvs.stride);
+		
+		out.attributes.push( { tangent, { normal, 0.0f }, { uv.x, uv.y, 0.0f, 0.0f } });
 	}
 			
 	return out;
@@ -123,15 +140,21 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	if (!app_state->is_new_level)
 	{
 		// Loading mesh
+		//TODO: get URI for textures from gltf
 		//TODO: temporarily not holding it anywhere
-		Geometry level_geo = load_geometry_from_gltf("../assets/meshes/avocado/Avocado.gltf", &app_state->arena_assets, &app_state->arena_frame);
-		Image_View level_tex_albedo = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_baseColor.png", &app_state->arena_assets, true);
+		//TODO: async loading
+		Geometry lvl_geo = load_geometry_from_gltf("../assets/meshes/avocado/Avocado.gltf", &app_state->arena_assets, &app_state->arena_frame);
 		
-		// Sending mesh geometric data to RHI
-		data_to_rhi->st_verts = level_geo.positions;
-		data_to_rhi->st_indices = level_geo.indices;
-		data_to_rhi->st_uvs = level_geo.uvs;
-		data_to_rhi->st_albedo = level_tex_albedo;
+		Image_View lvl_tex_albedo = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_baseColor.png", &app_state->arena_assets, true);
+		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_normal.png", &app_state->arena_assets, false);
+		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_roughnessMetallic.png", &app_state->arena_assets, false);
+		Image_View lvl_tex_enviro = memory->os_api.read_img(L"../assets/cubemap_test.png", &app_state->arena_assets, true);
+		
+		// Sending static geometric data to RHI
+		data_to_rhi->st_geo = lvl_geo;
+		// Sending static textures
+		data_to_rhi->st_albedo = lvl_tex_albedo;
+		data_to_rhi->st_normal = lvl_tex_normal;
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
 		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };
