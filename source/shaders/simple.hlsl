@@ -22,7 +22,7 @@ ConstantBuffer<Constant_Data_Frame>	cb_per_frame 	: register(b2);
 struct PSInput
 {
 	float4 pos_ndc : SV_POSITION;
-	float3 normal : _Normal;
+	float3 normal : NORMAL;
 	float2 uv : TEXCOORD;
 };
 
@@ -42,8 +42,11 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 	const float4x4 obj_to_clip = mul(cb_per_draw.world_to_clip, obj_to_world);
 	
 	result.pos_ndc = mul(obj_to_clip, pos);
-	result.uv = attributes[vert_index].uv;
-	result.normal = attributes[vert_index].normal;
+	result.uv = attributes[vert_index].uv.xy;
+	
+	// Normal display
+	result.normal = attributes[vert_index].normal.xyz;
+	result.normal = result.normal * 0.5f + 0.5f;
  
 	return result;
 }
@@ -52,7 +55,9 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	Texture2D<float4>albedo_tex = ResourceDescriptorHeap[cb_draw_ids.albedo_id];
-	float4 col = albedo_tex.Sample(sam_linear, input.uv);
-	//return input.color;
-	return cb_per_frame.light_col * col;
+	//float4 col = albedo_tex.Sample(sam_linear, input.uv);
+	
+	float3 col = pow(input.normal, 2.2);
+	return float4(col, 1.0f);
+	//return col;
 }

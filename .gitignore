@@ -400,3 +400,4 @@ FodyWeavers.xsd
 *.exe
 source/simplePS
 source/simpleVS
+*.bin

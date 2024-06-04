@@ -969,6 +969,7 @@ namespace lib
     return out;
 	}
 	
+	// following DirectX RH https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatrh
 	inline Mat4 create_look_at(Vec3 eye, Vec3 target, Vec3 up)
 	{
 		Mat4 out{};
@@ -1036,6 +1037,7 @@ namespace lib
 		return out;
 	}
 	
+	// following DirectX RH https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovrh
 	inline Mat4 create_perspective(f32 fov, f32 aspect, f32 near, f32 far)
 	{
 		Mat4 out{};

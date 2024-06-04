@@ -110,7 +110,9 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_pu
 		lib::Vec4 tangent = *(lib::Vec4*)((byte *)(temp_tangents.data) + v_i * temp_tangents.stride);
 		lib::Vec2 uv = *(lib::Vec2*)((byte *)(temp_uvs.data) + v_i * temp_uvs.stride);
 		
-		out.attributes.push( { tangent, { normal, 0.0f }, { uv.x, uv.y, 0.0f, 0.0f } });
+		out.attributes.push( 	{ tangent, 
+													{ -normal.x, normal.y, -normal.z, 0.0f }, 
+													{ uv.x, uv.y, 0.0f, 0.0f } });
 	}
 			
 	return out;
@@ -139,12 +141,14 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	
 	if (!app_state->is_new_level)
 	{
-		// Loading mesh
+		// Loading geometry
 		//TODO: get URI for textures from gltf
 		//TODO: temporarily not holding it anywhere
 		//TODO: async loading
 		Geometry lvl_geo = load_geometry_from_gltf("../assets/meshes/avocado/Avocado.gltf", &app_state->arena_assets, &app_state->arena_frame);
 		
+		//TODO: compress and save as .dds - maybe do compression in RHI?
+		//TODO: material abstraction that hold indexes to textures
 		Image_View lvl_tex_albedo = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_baseColor.png", &app_state->arena_assets, true);
 		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_normal.png", &app_state->arena_assets, false);
 		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_roughnessMetallic.png", &app_state->arena_assets, false);
@@ -155,9 +159,10 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		// Sending static textures
 		data_to_rhi->st_albedo = lvl_tex_albedo;
 		data_to_rhi->st_normal = lvl_tex_normal;
+		data_to_rhi->st_roughness = lvl_tex_rough;
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
-		app_state->camera = { .pos = { 3.0f, 0.0f, 3.0f }, .yaw = PI32 + PI32 / 4.0f, .fov = 50.0f };
+		app_state->camera = { .pos = { 0.0f, 2.0f, -10.0f }, .yaw = PI32 / 2.0f, .fov = 50.0f };
 		
 		app_state->is_new_level = true;
 		data_to_rhi->is_new_static = app_state->is_new_level;
@@ -220,15 +225,13 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	{
 		lib::Mat4 mat_view = lib::create_look_at( camera->pos, camera->pos + camera->forward, { 0.0f, 1.0f, 0.0f });
 		lib::Mat4 mat_scale = lib::create_scale(70.0f);
-		lib::Mat4 mat_trans = lib::create_translate({-0.33f, 0.0f, 0.0f});
+		lib::Mat4 mat_trans = lib::create_translate({0.63f, 0.0f, -3.0f});
 		lib::Mat4 mat_rotation = lib::create_rotation_z((f32)window->time_ms / 1000.0f);
 		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(camera->fov), 
 		                                                   (f32)window->width/window->height, 
 		                                                   0.1f, 
 		                                                   100.0f);
-		lib::Mat4 mat_model = mat_trans  * mat_scale;
-		
-		f32 pulse = 1;
+		lib::Mat4 mat_model = mat_trans * mat_scale;
 		
 		// Pushing data
 		{
@@ -236,8 +239,9 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 			auto* draw_consts =		push_type<Constant_Data_Draw>(&app_state->arena_frame);
 			
 			// Frame constants
-			frame_consts->light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 1.0f });
-			frame_consts->light_col = { pulse, pulse, pulse, 1.0f };
+			frame_consts->light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 0.0f });
+			frame_consts->light_col = { 3.0f, 3.0f, 3.0f, 1.0f };
+			frame_consts->view_pos = { camera->pos, 1.0f };
 			// Draw constants
 			draw_consts->obj_to_world = mat_model;
 			draw_consts->world_to_clip = mat_projection * mat_view;
