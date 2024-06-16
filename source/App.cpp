@@ -160,6 +160,8 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		data_to_rhi->st_albedo = lvl_tex_albedo;
 		data_to_rhi->st_normal = lvl_tex_normal;
 		data_to_rhi->st_roughness = lvl_tex_rough;
+		data_to_rhi->st_enviro = lvl_tex_enviro;
+		
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
 		app_state->camera = { .pos = { 0.0f, 2.0f, -10.0f }, .yaw = PI32 / 2.0f, .fov = 50.0f };

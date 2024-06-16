@@ -12,6 +12,8 @@ struct Draw_Ids
 	u32 ind_id;
 	u32 attr_id;
 	u32 albedo_id;
+	u32 normal_id;
+	u32 rough_id;
 };
 
 

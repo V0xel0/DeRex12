@@ -639,7 +639,11 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& vertices_static = g_state.vertices_static;
 	auto& indices_static 	= g_state.indices_static;
 	auto& attr_static 		= g_state.attrs_static;
+	
 	auto& albedo_static 	= g_state.albedo_static;
+	auto& normal_static 	= g_state.albedo_static;
+	auto& rough_static 		= g_state.albedo_static;
+	
 	auto& static_pso 			= g_state.static_pso;
 	
 	auto* upload_heap = &g_state.upload_heaps[frame_index];
@@ -769,7 +773,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_frame = push_to_upload_heap(upload_heap, data_from_app->cb_frame);
 		D3D12_GPU_VIRTUAL_ADDRESS cbv_gpu_addr_draw = push_to_upload_heap(upload_heap, data_from_app->cb_draw);
-
+		
+		//TODO: This will need proper refactor along with whole resource/view/descriptor_heap managment
 		Resource_View view_verts = push_descriptor(device, cbv_srv_uav_heap, vertices_static.ptr, 
 																								 {
 																										.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
@@ -788,15 +793,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																									 .Buffer = {
 																															.NumElements = (u32)indices_static.size_bytes / indices_static.stride_bytes
 																									}});
-		
-		Resource_View view_tex_albedo = push_descriptor(device, cbv_srv_uav_heap, albedo_static.ptr, 
-																										{
-																											.Format = albedo_static.format,
-																											.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-																											.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-																											.Texture2D = {.MipLevels = 1}
-																										});
-		
+			
 		Resource_View view_attrs = push_descriptor(device, cbv_srv_uav_heap, attr_static.ptr, 
 																							 {
 																								 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
@@ -807,6 +804,32 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																													 .StructureByteStride = attr_static.stride_bytes,
 																													 .Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
 																								 }});
+		
+		Resource_View view_tex_albedo = push_descriptor(device, cbv_srv_uav_heap, albedo_static.ptr, 
+																										{
+																											.Format = albedo_static.format,
+																											.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+																											.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																											.Texture2D = {.MipLevels = 1}
+																										});
+		
+		Resource_View view_tex_normal = push_descriptor(device, cbv_srv_uav_heap, normal_static.ptr, 
+																									 {
+																										 .Format = normal_static.format,
+																										 .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+																										 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																										 .Texture2D = {.MipLevels = 1}
+																									 });
+		
+		Resource_View view_tex_rough = push_descriptor(device, cbv_srv_uav_heap, rough_static.ptr, 
+																										{
+																											.Format = rough_static.format,
+																											.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+																											.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																											.Texture2D = {.MipLevels = 1}
+																										});
+		
+		
 		// Populate command list
 		{
 			// Default state
@@ -821,11 +844,14 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				ctx->cmd_list->SetGraphicsRootSignature(static_pso.root_signature);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(2, cbv_gpu_addr_frame);
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
+				//TODO: find a way to generalize this
 				ctx->cmd_list->SetGraphicsRoot32BitConstants(0, sizeof(Draw_Ids) / sizeof(u32),
 																										 get_cptr(Draw_Ids{view_verts.id, 
 																										 view_indices.id, 
 																										 view_attrs.id,
-																										 view_tex_albedo.id
+																										 view_tex_albedo.id,
+																										 view_tex_normal.id,
+																										 view_tex_rough.id
 																										}), 0);
 				
 				ctx->cmd_list->DrawInstanced(view_indices.desc.Buffer.NumElements, 1, 0, 0);
@@ -852,11 +878,11 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			// Get next backbuffer index - updated on swapchain by Present()
 			frame_index = swapchain->GetCurrentBackBufferIndex();
 				
-			// Wait for fence value from frame (n-1) - not waiting on current frame
+			// Wait for fence value from next frame from swapchain - not waiting on current frame
 			sync_with_fence(&ctx->fence, fence_signals[frame_index]);
-			// Heaps from frame (n-1) are safe to reset cause work from that frame has finished
+			// Heaps from next frame are safe to reset cause work from that frame has finished
 			reset_upload_heap(&g_state.upload_heaps[frame_index]);
-			reset_descriptor_heap(cbv_srv_uav_heap);
+			reset_descriptor_heap(&g_state.cbv_srv_uav_heap[frame_index]);
 		}
 	}
 }

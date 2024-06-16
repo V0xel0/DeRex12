@@ -114,9 +114,14 @@ struct RHI_State
 	u32 height;
 	
 	// Data State
+	//TODO: Managment and/or abstraction 
 	Buffer vertices_static;
 	Buffer indices_static;
-	Buffer attrs_static; // temporary
+	Buffer attrs_static;
+	
 	Texture albedo_static;
+	Texture normal_static;
+	Texture rough_static;
+	
 	Pipeline static_pso;
 };
