@@ -326,8 +326,9 @@ namespace DX
 					dst_res_start_offset = upload->heap_arena.prev_offset;
 			}
 			
-			u64 dst_subres_offset = upload->heap_arena.curr_offset - dst_res_start_offset;
-			manual_offset(&upload->heap_arena, layouts[subres_i].Offset - dst_subres_offset);
+			//TODO: This is wrong, commented for now, fix!
+			//u64 dst_subres_offset = upload->heap_arena.curr_offset - dst_res_start_offset;
+			//manual_offset(&upload->heap_arena, layouts[subres_i].Offset - dst_subres_offset);
 		}
 		
 		//TODO: (change) single CopyTextureRegion starting from first subresource instead of each invidually
@@ -641,8 +642,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& attr_static 		= g_state.attrs_static;
 	
 	auto& albedo_static 	= g_state.albedo_static;
-	auto& normal_static 	= g_state.albedo_static;
-	auto& rough_static 		= g_state.albedo_static;
+	auto& normal_static 	= g_state.normal_static;
+	auto& rough_static 		= g_state.rough_static;
 	
 	auto& static_pso 			= g_state.static_pso;
 	
@@ -651,6 +652,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	// Static data upload
 	if (data_from_app->is_new_static)
 	{
+		// Create static shaders & psos
+		static_pso = create_basic_pipeline(device, data_from_app->shader_path);
+		
 		// Create & push static buffers
 		vertices_static = create_buffer(device, data_from_app->st_geo.positions);
 		push_to_default(ctx, &vertices_static, upload_heap, data_from_app->st_geo.positions, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -662,12 +666,16 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		attr_static = create_buffer(device, attr_mem);
 		push_to_default(ctx, &attr_static, upload_heap, attr_mem, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		
-		// Create & push static textures
+		// Create & push albedo
 		albedo_static = create_texture(device, data_from_app->st_albedo, 1, 1);
 		push_texture_to_default(device, ctx, &albedo_static, upload_heap, data_from_app->st_albedo.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		
-		// Create static shaders & psos
-		static_pso = create_basic_pipeline(device, data_from_app->shader_path);
+		// Create & push normal
+		normal_static = create_texture(device, data_from_app->st_normal, 1, 1);
+		push_texture_to_default(device, ctx, &normal_static, upload_heap, data_from_app->st_normal.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		// Create & push roughness
+		rough_static = create_texture(device, data_from_app->st_roughness, 1, 1);
+		//push_texture_to_default(device, ctx, &rough_static, upload_heap, data_from_app->st_roughness.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
 		execute_and_wait(ctx);
 	}
 	

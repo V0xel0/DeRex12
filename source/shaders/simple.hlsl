@@ -48,11 +48,8 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 	
 	result.uv = attributes[vert_index].uv.xy;
 	result.tangent = attributes[vert_index].tangent;
-	
 	result.normal = attributes[vert_index].normal.xyz;
-	// Normal display
-	result.normal = result.normal * 0.5f + 0.5f;
- 
+	
 	return result;
 }
 
@@ -64,16 +61,17 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	
 	const float3x3 obj_to_world = (float3x3)cb_per_draw.obj_to_world;
 	
-	// should I multiply by -1.0f same as object normal?
+	float3 normal = normalize(inp.normal);
+	// sampling normal from non compressed texture for now
+	float3 tangent = normalize(inp.tangent.xyz);
+	float3 bitangent = normalize(cross(inp.normal, tangent)) * inp.tangent.w;
+	
 	float3 normal_t = normalize(normal_tex.Sample(sam_linear, inp.uv).rgb * 2.0f - 1.0f);
-
-	// its fine to not normalize here - little less accurate but fine
-	float3 bitangent = cross(inp.normal, inp.tangent.xyz) * inp.tangent.w;
-	normal_t = mul(obj_to_world, normal_t);
+	float3x3 tn_basis = mul(obj_to_world, transpose(float3x3(tangent, bitangent, normal)));
+	normal_t = normalize(mul(tn_basis, normal_t));
 	
-	//float4 col = albedo_tex.Sample(sam_linear, inp.uv);
+	float3 col = pow(normal_t * 0.5f + 0.5f, 2.2);
+	//float3 col = albedo_tex.Sample(sam_linear, inp.uv).rgb;
 	
-	float3 col = pow(inp.normal, 2.2);
 	return float4(col, 1.0f);
-	//return col;
 }

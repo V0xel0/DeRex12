@@ -105,12 +105,13 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_pu
 	// Copy rest of attributes to Geometry layout
 	for(u64 v_i = 0; v_i < out.attributes.size; ++v_i)
 	{
-		// casts are "safe" here cause we now the data has this type
+		// casts are "safe" here cause we know the data has this type
 		lib::Vec3 normal = *(lib::Vec3*)((byte *)(temp_normals.data) + v_i * temp_normals.stride);
 		lib::Vec4 tangent = *(lib::Vec4*)((byte *)(temp_tangents.data) + v_i * temp_tangents.stride);
 		lib::Vec2 uv = *(lib::Vec2*)((byte *)(temp_uvs.data) + v_i * temp_uvs.stride);
 		
-		out.attributes.push( 	{ tangent, 
+		//TODO: I have no idea why I have to invert x and z in tangent and normal vectors
+		out.attributes.push( { { -tangent.x, tangent.y, -tangent.z, tangent.w },
 													{ -normal.x, normal.y, -normal.z, 0.0f }, 
 													{ uv.x, uv.y, 0.0f, 0.0f } });
 	}
