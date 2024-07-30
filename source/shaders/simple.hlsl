@@ -3,7 +3,7 @@
 
 #define RootSignatureBasic \
 "RootFlags(CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED), " \
-"RootConstants(b0, num32BitConstants=8, visibility = SHADER_VISIBILITY_ALL), " \
+"RootConstants(b0, num32BitConstants=16, visibility = SHADER_VISIBILITY_ALL), " \
 "CBV(b1, visibility = SHADER_VISIBILITY_ALL)," \
 "CBV(b2, visibility = SHADER_VISIBILITY_PIXEL)," \
 "StaticSampler(" \

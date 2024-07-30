@@ -48,7 +48,7 @@ inline void THR(HRESULT) {}
 namespace DX
 {
 	internal constexpr u32 g_alloc_alignment = 512;
-	internal constexpr u64 g_upload_heap_max_size = MiB(50);
+	internal constexpr u64 g_upload_heap_max_size = MiB(200);
 	internal constexpr u64 g_max_count_cbv_srv_uav_descriptors = 128;
 	internal constexpr u32 g_max_count_texture_subresource = 72; // max: 12mips for cubemap
 	

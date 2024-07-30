@@ -559,6 +559,7 @@ namespace Win32
 		return out;
 	}
 	
+	//TODO: Consider refactor with https://gist.github.com/mmozeiko/1f97a51db53999093ba5759c16c577d4
 	Image_View load_img_dxgi_compatible(const wchar_t* file_path, Alloc_Arena* arena, b32 is_srgb = true)
 	{
 		DXGI_FORMAT dxgi_format = DXGI_FORMAT_UNKNOWN;

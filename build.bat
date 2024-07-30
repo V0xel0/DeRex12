@@ -22,7 +22,6 @@ if "%~1"=="-Debug" (
 if "%~1"=="" (
 	echo [[ debug build ]]
 	set compilerFlags=%compilerFlags% /Od /MTd /D_DEBUG
-	set rayname=d_raylib
 )
 if "%~1"=="-Release" (
 	echo [[ release build ]]
