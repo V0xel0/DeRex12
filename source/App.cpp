@@ -18,7 +18,7 @@
 inline constexpr u64 frame_max_size = MiB(128);
 inline constexpr u64 assets_max_size = GiB(1);
 
-inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.15f)
+inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.3f)
 {
 	lib::Vec3 out = cam_pos;
 	
@@ -110,9 +110,8 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_pu
 		lib::Vec4 tangent = *(lib::Vec4*)((byte *)(temp_tangents.data) + v_i * temp_tangents.stride);
 		lib::Vec2 uv = *(lib::Vec2*)((byte *)(temp_uvs.data) + v_i * temp_uvs.stride);
 		
-		//TODO: I have no idea why I have to invert x and z in tangent and normal vectors
-		out.attributes.push( { { -tangent.x, tangent.y, -tangent.z, tangent.w },
-													{ -normal.x, normal.y, -normal.z, 0.0f }, 
+		out.attributes.push( {{ tangent.x, tangent.y, tangent.z, tangent.w },
+													{ normal.x, normal.y, normal.z, 0.0f }, 
 													{ uv.x, uv.y, 0.0f, 0.0f } });
 	}
 			
@@ -165,7 +164,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
-		app_state->camera = { .pos = { 0.0f, 2.0f, -10.0f }, .yaw = PI32 / 2.0f, .fov = 50.0f };
+		app_state->camera = { .pos = { 0.0f, 2.0f, -30.0f }, .yaw = PI32 / 2.0f, .fov = 50.0f };
 		
 		app_state->is_new_level = true;
 		data_to_rhi->is_new_static = app_state->is_new_level;
@@ -202,6 +201,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 				}
 				
 				lib::Vec3 cam_rightward = lib::normalize(lib::cross(camera->forward, { 0.0f, 1.0f, 0.0f }));
+				lib::Vec3 cam_upward = lib::normalize(lib::cross(camera->forward, cam_rightward));
 				
 				// Keyboard keys
 				if (controller.move_forward.wasDown)
@@ -220,6 +220,14 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 				{
 					camera->pos = move_camera(camera->pos, -cam_rightward);
 				}
+				if (controller.action1.wasDown)
+				{
+					camera->pos = move_camera(camera->pos, cam_upward);
+				}
+				if (controller.action2.wasDown)
+				{
+					camera->pos = move_camera(camera->pos, -cam_upward);
+				}
 			}
 		}
 	}
@@ -227,30 +235,42 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	// Modyfing/Creating data for RHI
 	{
 		lib::Mat4 mat_view = lib::create_look_at( camera->pos, camera->pos + camera->forward, { 0.0f, 1.0f, 0.0f });
-		lib::Mat4 mat_scale = lib::create_scale(70.0f);
-		lib::Mat4 mat_trans = lib::create_translate({0.63f, 0.0f, -3.0f});
-		lib::Mat4 mat_rotation = lib::create_rotation_z((f32)window->time_ms / 1000.0f);
+		lib::Mat4 mat_scale = lib::create_scale(200.0f);
+		lib::Mat4 mat_trans = lib::create_translate({0.0f, 0.0f, -5.0f});
+		lib::Mat4 mat_rotation = lib::create_rotation_y((f32)window->time_ms / 1000.0f);
 		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(camera->fov), 
 		                                                   (f32)window->width/window->height, 
 		                                                   0.1f, 
 		                                                   100.0f);
-		lib::Mat4 mat_model = mat_trans * mat_scale;
+		lib::Mat4 mat_model = mat_trans  * mat_scale;
 		
 		// Pushing data
 		{
-			auto* frame_consts =	push_type<Constant_Data_Frame>(&app_state->arena_frame);
-			auto* draw_consts =		push_type<Constant_Data_Draw>(&app_state->arena_frame);
+			auto* frame_consts	=	push_type<Constant_Data_Frame>(&app_state->arena_frame);
+			auto* draw_consts		=	push_type<Constant_Data_Draw>(&app_state->arena_frame);
 			
 			// Frame constants
-			frame_consts->light_pos = lib::normalize(lib::Vec4 { -6.0f, 1.0f, -6.0f, 0.0f });
-			frame_consts->light_col = { 3.0f, 3.0f, 3.0f, 1.0f };
-			frame_consts->view_pos = { camera->pos, 1.0f };
-			// Draw constants
-			draw_consts->obj_to_world = mat_model;
-			draw_consts->world_to_clip = mat_projection * mat_view;
+			{
+				frame_consts->lights[0].pos = { 70, 50, 10, 0.0f};
+				frame_consts->lights[1].pos = {	-90, -40, -10, 0.0f};
+				frame_consts->lights[2].pos = {	-5, -10, -15, 0.0f};
+				frame_consts->lights[3].pos = {	13, 15, 15, 0.0f};
+				frame_consts->lights[0].radiance = { 0.9f, 0.9f, 0.9f, 200.0f };
+				frame_consts->lights[1].radiance = { 0.9f, 0.9f, 0.9f, 240.0f };
+				frame_consts->lights[2].radiance = { 0.9f, 0.9f, 0.9f, 5.0f };
+				frame_consts->lights[3].radiance = { 0.9f, 0.9f, 0.9f, 40.0f };
+				
+				frame_consts->view_pos = { lib::Vec3{camera->pos}, 1.0f };
+			}
 			
-			data_to_rhi->cb_frame = { .data = frame_consts, .bytes = sizeof(*frame_consts) };
-			data_to_rhi->cb_draw  = { .data = draw_consts, .bytes = sizeof(*draw_consts)  };
+			// Draw constants
+			{
+				draw_consts->obj_to_world = mat_model;
+				draw_consts->world_to_clip = mat_projection * mat_view;
+			
+				data_to_rhi->cb_frame = { .data = frame_consts, .bytes = sizeof(*frame_consts) };
+				data_to_rhi->cb_draw  = { .data = draw_consts, .bytes = sizeof(*draw_consts)  };
+			}
 		}
 	}
 	

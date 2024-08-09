@@ -18,6 +18,9 @@ struct Draw_Ids
 
 
 //============================ Application -> Shader ============================
+
+static const u32 g_count_lights 	= 4; //TODO: just for a while
+
 struct Vertex
 {
 	Vec3 position;
@@ -34,8 +37,11 @@ struct Attributes
 
 struct Constant_Data_Frame
 {
-	Vec4 light_pos;
-	Vec4 light_col;
+	struct 
+	{
+		Vec4 pos; // w is light type
+		Vec4 radiance; // w is power
+	} lights[g_count_lights];
 	Vec4 view_pos;
 };
 
@@ -43,6 +49,4 @@ struct Constant_Data_Draw
 {
 	Mat4 obj_to_world;
 	Mat4 world_to_clip;
-	Vec3 albedo;
-	f32 pad;
 };

@@ -674,7 +674,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		push_texture_to_default(device, ctx, &normal_static, upload_heap, data_from_app->st_normal.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		// Create & push roughness
 		rough_static = create_texture(device, data_from_app->st_roughness, 1, 1);
-		//push_texture_to_default(device, ctx, &rough_static, upload_heap, data_from_app->st_roughness.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		push_texture_to_default(device, ctx, &rough_static, upload_heap, data_from_app->st_roughness.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		execute_and_wait(ctx);
 	}

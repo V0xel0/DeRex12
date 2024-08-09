@@ -1001,6 +1001,39 @@ namespace lib
 		return out;
 	}
 	
+	inline Mat4 create_look_at2(Vec3 eye, Vec3 target, Vec3 up)
+	{
+		Mat4 out{};
+        
+		Vec3 forward    = normalize(target-eye);
+		Vec3 right        = normalize(cross(forward, up));
+		Vec3 upward        = cross(right, forward);
+        
+		out.e[0][0] = right.x;
+    out.e[0][1] = upward.x;
+    out.e[0][2] = -forward.x;
+    out.e[0][3] = 0.0f;
+
+    out.e[1][0] = right.y;
+    out.e[1][1] = upward.y;
+    out.e[1][2] = -forward.y;
+    out.e[1][3] = 0.0f;
+
+    out.e[2][0] = right.z;
+    out.e[2][1] = upward.z;
+    out.e[2][2] = -forward.z;
+    out.e[2][3] = 0.0f;
+
+    out.e[3][0] = -dot(right, eye);
+    out.e[3][1] = -dot(upward, eye);
+    out.e[3][2] = dot(forward, eye);
+    out.e[3][3] = 1.0f;
+        
+		return out;
+	}
+	
+
+	
 	inline Mat4 create_fpp_view(Vec3 eye, f32 pitch, f32 yaw)
 	{
 		Mat4 out{};
