@@ -33,7 +33,7 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 {
 	PSInput result;
  
-	Buffer<u16> indices_buffer 							= ResourceDescriptorHeap[cb_draw_ids.ind_id];
+	Buffer<u32> indices_buffer 							= ResourceDescriptorHeap[cb_draw_ids.ind_id];
 	StructuredBuffer<Vertex> pos_buffer 		= ResourceDescriptorHeap[cb_draw_ids.pos_id];
 	StructuredBuffer<Attributes>attributes 	= ResourceDescriptorHeap[cb_draw_ids.attr_id];
 	
@@ -56,8 +56,8 @@ static const float 	g_PI 						= 3.141592;
 static const float 	g_epsilon 			= 0.00001;
 static const float3 g_f0_dielectric = 0.04; //TODO: reparametrization, see filament & frostbite
 
-static const float exposure  = 1.66;
-static const float white_point = 1.0;
+static const float exposure  = 3.33; //TODO: make it from app, later automatic
+static const float white_point = 1.0; //TODO: make it from app, later automatic
 
 #include "../source/shaders/pbr_functions.hlsli"
 #include "../source/shaders/tonemappers.hlsli"
@@ -74,7 +74,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	
 	const float3 albedo 				= albedo_tex.Sample(sam_linear, inp.uv).rgb;
 	const float metallic 				= met_rough.y;
-	const float roughness 			= 0.5;
+	const float roughness 			= met_rough.x;
 	
 	float3 normal 		= normalize(inp.normal);
 	float3 tangent 		= normalize(inp.tangent.xyz);
@@ -111,7 +111,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		float3 diffuse 	= kd * albedo;
 		float3 specular = (F*D*G) / max(g_epsilon, 4.0 * nol * nov);
 		
-		debug += float3(G,G,G);
+		debug += float3(nol,nol,nol);
 		direct_radiance += (diffuse + specular) * radiance * nol;
 	}
 	//float3 col = pow(normal_t * 0.5f + 0.5f, 2.2);

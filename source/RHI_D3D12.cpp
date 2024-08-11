@@ -795,7 +795,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																									}});
 		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, indices_static.ptr,
 																								 {
-																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R16_UINT, //SYNC THIS!
+																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R32_UINT, //SYNC THIS!
 																									 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 																									 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 																									 .Buffer = {

@@ -18,7 +18,7 @@
 inline constexpr u64 frame_max_size = MiB(128);
 inline constexpr u64 assets_max_size = GiB(1);
 
-inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.3f)
+inline internal lib::Vec3 move_camera(lib::Vec3 cam_pos, lib::Vec3 dir, f32 speed = 0.2f)
 {
 	lib::Vec3 out = cam_pos;
 	
@@ -145,13 +145,13 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		//TODO: get URI for textures from gltf
 		//TODO: temporarily not holding it anywhere
 		//TODO: async loading
-		Geometry lvl_geo = load_geometry_from_gltf("../assets/meshes/avocado/Avocado.gltf", &app_state->arena_assets, &app_state->arena_frame);
+		Geometry lvl_geo = load_geometry_from_gltf("../assets/meshes/scifihelmet/SciFiHelmet.gltf", &app_state->arena_assets, &app_state->arena_frame);
 		
 		//TODO: compress and save as .dds - maybe do compression in RHI?
 		//TODO: material abstraction that hold indexes to textures
-		Image_View lvl_tex_albedo = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_baseColor.png", &app_state->arena_assets, true);
-		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_normal.png", &app_state->arena_assets, false);
-		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/avocado/Avocado_roughnessMetallic.png", &app_state->arena_assets, false);
+		Image_View lvl_tex_albedo = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_BaseColor.png", &app_state->arena_assets, true);
+		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_Normal.png", &app_state->arena_assets, false);
+		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_MetallicRoughness.png", &app_state->arena_assets, false);
 		Image_View lvl_tex_enviro = memory->os_api.read_img(L"../assets/cubemap_test.png", &app_state->arena_assets, true);
 		
 		// Sending static geometric data to RHI
@@ -235,7 +235,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	// Modyfing/Creating data for RHI
 	{
 		lib::Mat4 mat_view = lib::create_look_at( camera->pos, camera->pos + camera->forward, { 0.0f, 1.0f, 0.0f });
-		lib::Mat4 mat_scale = lib::create_scale(200.0f);
+		lib::Mat4 mat_scale = lib::create_scale(4.0f);
 		lib::Mat4 mat_trans = lib::create_translate({0.0f, 0.0f, -5.0f});
 		lib::Mat4 mat_rotation = lib::create_rotation_y((f32)window->time_ms / 1000.0f);
 		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(camera->fov), 
