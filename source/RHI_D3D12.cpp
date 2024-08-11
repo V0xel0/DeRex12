@@ -660,7 +660,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		push_to_default(ctx, &vertices_static, upload_heap, data_from_app->st_geo.positions, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		
 		indices_static = create_buffer(device, data_from_app->st_geo.indices);
-		push_to_default(ctx, &indices_static, upload_heap, data_from_app->st_geo.indices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		push_to_default(ctx, &indices_static, upload_heap, data_from_app->st_geo.indices, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 		
 		Memory_View attr_mem = data_from_app->st_geo.attributes.get_memory_view();
 		attr_static = create_buffer(device, attr_mem);
@@ -793,14 +793,6 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																															.StructureByteStride = vertices_static.stride_bytes,
 																															.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE 
 																									}});
-		Resource_View view_indices = push_descriptor(device, cbv_srv_uav_heap, indices_static.ptr,
-																								 {
-																									 .Format = DXGI_FORMAT::DXGI_FORMAT_R32_UINT, //SYNC THIS!
-																									 .ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-																									 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-																									 .Buffer = {
-																															.NumElements = (u32)indices_static.size_bytes / indices_static.stride_bytes
-																									}});
 			
 		Resource_View view_attrs = push_descriptor(device, cbv_srv_uav_heap, attr_static.ptr, 
 																							 {
@@ -854,15 +846,24 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 				ctx->cmd_list->SetGraphicsRootConstantBufferView(1, cbv_gpu_addr_draw);
 				//TODO: find a way to generalize this
 				ctx->cmd_list->SetGraphicsRoot32BitConstants(0, sizeof(Draw_Ids) / sizeof(u32),
-																										 get_cptr(Draw_Ids{view_verts.id, 
-																										 view_indices.id, 
-																										 view_attrs.id,
-																										 view_tex_albedo.id,
-																										 view_tex_normal.id,
-																										 view_tex_rough.id
+																										 get_cptr(Draw_Ids{
+																											view_verts.id, 
+																											view_attrs.id,
+																											view_tex_albedo.id,
+																											view_tex_normal.id,
+																											view_tex_rough.id
 																										}), 0);
 				
-				ctx->cmd_list->DrawInstanced(view_indices.desc.Buffer.NumElements, 1, 0, 0);
+				D3D12_INDEX_BUFFER_VIEW view_indices
+				{
+					.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
+					.SizeInBytes = (UINT)indices_static.size_bytes,
+					.Format = DXGI_FORMAT_R32_UINT
+				};
+				
+				ctx->cmd_list->IASetIndexBuffer(&view_indices);
+				u32 count_indices = (u32)indices_static.size_bytes / indices_static.stride_bytes;
+				ctx->cmd_list->DrawIndexedInstanced(count_indices, 1, 0, 0, 0);
 			}
 		}
 			

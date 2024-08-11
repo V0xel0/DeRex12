@@ -2,7 +2,7 @@
 #include "../source/Shader_And_CPU_Common.h"
 
 #define RootSignatureBasic \
-"RootFlags(CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED), " \
+"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED), " \
 "RootConstants(b0, num32BitConstants=16, visibility = SHADER_VISIBILITY_ALL), " \
 "CBV(b1, visibility = SHADER_VISIBILITY_ALL)," \
 "CBV(b2, visibility = SHADER_VISIBILITY_PIXEL)," \
@@ -33,21 +33,19 @@ PSInput VSMain(uint vertex_id : SV_VertexID)
 {
 	PSInput result;
  
-	Buffer<u32> indices_buffer 							= ResourceDescriptorHeap[cb_draw_ids.ind_id];
 	StructuredBuffer<Vertex> pos_buffer 		= ResourceDescriptorHeap[cb_draw_ids.pos_id];
 	StructuredBuffer<Attributes>attributes 	= ResourceDescriptorHeap[cb_draw_ids.attr_id];
 	
-	u32 vert_index = indices_buffer[vertex_id];
-	float4 pos = float4(pos_buffer[vert_index].position, 1.0f);
+	float4 pos = float4(pos_buffer[vertex_id].position, 1.0f);
 	
 	const float4x4 obj_to_world = cb_per_draw.obj_to_world;
 	const float4x4 obj_to_clip = mul(cb_per_draw.world_to_clip, obj_to_world);
 	
 	result.pos_ndc 	= mul(obj_to_clip, pos);
 	result.pos 			= mul(obj_to_world, pos).xyz;
-	result.uv 			= attributes[vert_index].uv.xy;
-	result.tangent 	= attributes[vert_index].tangent;
-	result.normal		= attributes[vert_index].normal.xyz;
+	result.uv 			= attributes[vertex_id].uv.xy;
+	result.tangent 	= attributes[vertex_id].tangent;
+	result.normal		= attributes[vertex_id].normal.xyz;
 	
 	return result;
 }
