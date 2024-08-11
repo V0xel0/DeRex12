@@ -236,7 +236,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 	{
 		lib::Mat4 mat_view = lib::create_look_at( camera->pos, camera->pos + camera->forward, { 0.0f, 1.0f, 0.0f });
 		lib::Mat4 mat_scale = lib::create_scale(4.0f);
-		lib::Mat4 mat_trans = lib::create_translate({0.0f, 0.0f, -5.0f});
+		lib::Mat4 mat_trans = lib::create_translate({0.0f, 0.0f, 0.0f});
 		lib::Mat4 mat_rotation = lib::create_rotation_y((f32)window->time_ms / 1000.0f);
 		lib::Mat4 mat_projection = lib::create_perspective(lib::deg_to_rad(camera->fov), 
 		                                                   (f32)window->width/window->height, 
