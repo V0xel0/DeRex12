@@ -54,7 +54,7 @@ static const float 	g_PI 						= 3.141592;
 static const float 	g_epsilon 			= 0.00001;
 static const float3 g_f0_dielectric = 0.04; //TODO: reparametrization, see filament & frostbite
 
-static const float exposure  = 3.33; //TODO: make it from app, later automatic
+static const float exposure  = 3.0; //TODO: make it from app, later automatic
 static const float white_point = 1.0; //TODO: make it from app, later automatic
 
 #include "../source/shaders/pbr_functions.hlsli"
@@ -103,11 +103,11 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		
 		float3	F 	= fresnel_shlick(g_f0_dielectric, loh);
 		float		D 	= ndf_ggx(noh, roughness);
-		float		G 	= geo_smith_ggx(nol, nov, roughness);
+		float		V 	= geo_smith_ggx_correlated(nol, nov, roughness);
 		float3 kd 	= lerp(float3(1,1,1) - F, float3(0,0,0), metallic);
 		
 		float3 diffuse 	= kd * albedo;
-		float3 specular = (F*D*G) / max(g_epsilon, 4.0 * nol * nov);
+		float3 specular = F*(D*V);
 		
 		debug += float3(nol,nol,nol);
 		direct_radiance += (diffuse + specular) * radiance * nol;

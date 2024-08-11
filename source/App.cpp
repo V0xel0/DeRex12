@@ -164,7 +164,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		
-		app_state->camera = { .pos = { 0.0f, 2.0f, -30.0f }, .yaw = PI32 / 2.0f, .fov = 50.0f };
+		app_state->camera = { .pos = { 0.0f, 1.0f, 20.0f }, .yaw = -PI32 / 2.0f , .fov = 50.0f };
 		
 		app_state->is_new_level = true;
 		data_to_rhi->is_new_static = app_state->is_new_level;

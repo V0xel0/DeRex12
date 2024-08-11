@@ -9,19 +9,6 @@ float ndf_ggx(float noh, float roughness)
 	return alpha_sq / (g_PI * denom * denom);
 }
 
-float shlick_g1(float nox, float k)
-{
-	return nox / (nox * (1.0 - k) + k);
-}
-
-float geo_smith_ggx(float nol, float nov, float roughness)
-{
-	float r = roughness + 1.0;
-	float k = (r * r) / 8.0; // Roughness remap from Epic
-	
-	return shlick_g1(nol, k) * shlick_g1(nov, k);
-}
-
 // optimized correlated, from "moving frostbite to pbr 3.0" notes
 float geo_smith_ggx_correlated(float nol, float nov, float roughness) 
 {
@@ -37,9 +24,23 @@ float3 fresnel_shlick(float3 f0, float nox)
 	return f0 + (1.0 - f0) * pow(1.0 - nox, 5.0);
 }
 
+// ------------------------------ OLD ----------------------------------------------------------------------
 float3 get_view_reflected_normal(float3 n, float3 v)
 {
 	float nov = dot(n, v);
 	n += (2.0 * saturate(-nov)) * v;
 	return n;
+}
+
+float shlick_g1(float nox, float k)
+{
+	return nox / (nox * (1.0 - k) + k);
+}
+
+float geo_smith_schlick(float nol, float nov, float roughness)
+{
+	float r = roughness + 1.0;
+	float k = (r * r) / 8.0; // Roughness remap from Epic
+	
+	return shlick_g1(nol, k) * shlick_g1(nov, k);
 }

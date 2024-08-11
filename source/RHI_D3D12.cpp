@@ -86,6 +86,44 @@ namespace DX
 		wait_for_work(ctx);
 	}
 	
+	D3D12_INDEX_BUFFER_VIEW get_index_buffer_view(Buffer buf)
+	{
+		D3D12_INDEX_BUFFER_VIEW out{};
+					
+		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+		if (buf.stride_bytes == 2)
+			format = DXGI_FORMAT_R16_UINT;
+		else if (buf.stride_bytes == 4)
+			format = DXGI_FORMAT_R32_UINT;
+					
+		assert(format != DXGI_FORMAT_UNKNOWN && "not supported stride!");
+					
+		out =
+		{
+			.BufferLocation = buf.ptr->GetGPUVirtualAddress(),
+			.SizeInBytes = (UINT)buf.size_bytes,
+			.Format = format
+		};
+					
+		return out;
+	}
+				
+	u32 get_count_indices(D3D12_INDEX_BUFFER_VIEW view)
+	{
+		u32 out = 0;
+		u32 stride = 0;
+					
+		if (view.Format == DXGI_FORMAT_R16_UINT)
+			stride = 2;
+		else if (view.Format == DXGI_FORMAT_R32_UINT)
+			stride = 4;
+					
+		assert(stride != 0 && "wrong view!");
+					
+		out = view.SizeInBytes / stride;
+		return out;
+	}
+	
 	[[nodiscard]]
 	internal IDxcResult* compile_shader_default(LPCWSTR path, LPCWSTR name, LPCWSTR entry_point, LPCWSTR target)
 	{
@@ -829,7 +867,6 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																											.Texture2D = {.MipLevels = 1}
 																										});
 		
-		
 		// Populate command list
 		{
 			// Default state
@@ -854,16 +891,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																											view_tex_rough.id
 																										}), 0);
 				
-				D3D12_INDEX_BUFFER_VIEW view_indices
-				{
-					.BufferLocation = indices_static.ptr->GetGPUVirtualAddress(),
-					.SizeInBytes = (UINT)indices_static.size_bytes,
-					.Format = DXGI_FORMAT_R32_UINT
-				};
-				
+				auto view_indices = get_index_buffer_view(indices_static);
 				ctx->cmd_list->IASetIndexBuffer(&view_indices);
-				u32 count_indices = (u32)indices_static.size_bytes / indices_static.stride_bytes;
-				ctx->cmd_list->DrawIndexedInstanced(count_indices, 1, 0, 0, 0);
+				ctx->cmd_list->DrawIndexedInstanced(get_count_indices(view_indices), 1, 0, 0, 0);
 			}
 		}
 			
