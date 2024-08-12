@@ -1,4 +1,25 @@
-// https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl
+// https://www.khronos.org/news/press/khronos-pbr-neutral-tone-mapper-released-for-true-to-life-color-rendering-of-3d-products
+// https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl
+float3 tonemap_khronos(float3 color )
+{
+	const float startCompression = 0.8 - 0.04;
+	const float desaturation = 0.15;
+
+	float x = min(color.r, min(color.g, color.b));
+	float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+	color -= offset;
+
+	float peak = max(color.r, max(color.g, color.b));
+	if (peak < startCompression) return color;
+
+	const float d = 1.0 - startCompression;
+	float newPeak = 1.0 - d * d / (peak + d - startCompression);
+	color *= newPeak / peak;
+
+	float g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
+	return lerp(color, newPeak * float3(1, 1, 1), g);
+}
+
 static const float3x3 ACESInputMat =
 {
 {0.59719, 0.35458, 0.04823},
@@ -21,21 +42,8 @@ float3 RRTAndODTFit(float3 v)
 	return a / b;
 }
 
-float3 ACESFitted(float3 color)
-{
-	color = mul(ACESInputMat, color);
-
-	// Apply RRT and ODT
-	color = RRTAndODTFit(color);
-
-	color = mul(ACESOutputMat, color);
-
-	// Clamp to [0, 1]
-	color = saturate(color);
-
-	return color;
-}
-
+// ACES filmic tone map approximation by Stephen Hill (@self_shadow)
+// https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl
 float3 tonemap_ACES(float3 color)
 {
 	color = mul(ACESInputMat, color);

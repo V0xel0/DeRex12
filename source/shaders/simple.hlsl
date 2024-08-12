@@ -66,7 +66,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	Texture2D<float4>albedo_tex = ResourceDescriptorHeap[cb_draw_ids.albedo_id];
 	Texture2D<float4>normal_tex = ResourceDescriptorHeap[cb_draw_ids.normal_id];
 	Texture2D<float4>rough_tex 	= ResourceDescriptorHeap[cb_draw_ids.rough_id];
-	Texture2D<float4>ao_tex 	= ResourceDescriptorHeap[cb_draw_ids.ao_id];
+	Texture2D<float4>ao_tex 		= ResourceDescriptorHeap[cb_draw_ids.ao_id];
 	
 	const float3x3 obj_to_world = (float3x3)cb_per_draw.obj_to_world;
 	const float2 met_rough 			= rough_tex.Sample(sam_linear, inp.uv).gb;
@@ -119,7 +119,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	float3 indirect_radiance = 0.0;
 	float3 output_radiance = (direct_radiance + indirect_radiance) * ao;
 	
-	float3 out_color = tonemap_ACES(output_radiance * exposure);
+	float3 out_color = tonemap_khronos(output_radiance * exposure);
 	
 	return float4(out_color, 1.0f);
 }
