@@ -13,6 +13,7 @@ struct Draw_Ids
 	u32 albedo_id;
 	u32 normal_id;
 	u32 rough_id;
+	u32 ao_id;
 };
 
 

@@ -153,7 +153,8 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_Normal.png", &app_state->arena_assets, false);
 		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_MetallicRoughness.png", &app_state->arena_assets, false);
 		Image_View lvl_tex_enviro = memory->os_api.read_img(L"../assets/cubemap_test.png", &app_state->arena_assets, true);
-		
+		Image_View lvl_tex_ao = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_AmbientOcclusion.png", &app_state->arena_assets, true);
+			
 		// Sending static geometric data to RHI
 		data_to_rhi->st_geo = lvl_geo;
 		// Sending static textures
@@ -161,6 +162,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		data_to_rhi->st_normal = lvl_tex_normal;
 		data_to_rhi->st_roughness = lvl_tex_rough;
 		data_to_rhi->st_enviro = lvl_tex_enviro;
+		data_to_rhi->st_ao = lvl_tex_ao;
 		
 		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
 		

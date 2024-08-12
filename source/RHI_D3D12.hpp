@@ -122,6 +122,7 @@ struct RHI_State
 	Texture albedo_static;
 	Texture normal_static;
 	Texture rough_static;
+	Texture ao_static;
 	
 	Pipeline static_pso;
 };

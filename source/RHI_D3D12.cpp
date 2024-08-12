@@ -682,6 +682,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& albedo_static 	= g_state.albedo_static;
 	auto& normal_static 	= g_state.normal_static;
 	auto& rough_static 		= g_state.rough_static;
+	auto& ao_static 			= g_state.ao_static;
 	
 	auto& static_pso 			= g_state.static_pso;
 	
@@ -713,6 +714,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		// Create & push roughness
 		rough_static = create_texture(device, data_from_app->st_roughness, 1, 1);
 		push_texture_to_default(device, ctx, &rough_static, upload_heap, data_from_app->st_roughness.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		// Create & push ambient occlusion
+		ao_static = create_texture(device, data_from_app->st_ao, 1, 1);
+		push_texture_to_default(device, ctx, &ao_static, upload_heap, data_from_app->st_ao.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		execute_and_wait(ctx);
 	}
@@ -867,6 +871,14 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																											.Texture2D = {.MipLevels = 1}
 																										});
 		
+		Resource_View view_ao = push_descriptor(device, cbv_srv_uav_heap, ao_static.ptr, 
+																									 {
+																										 .Format = ao_static.format,
+																										 .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+																										 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																										 .Texture2D = {.MipLevels = 1}
+																									 });
+		
 		// Populate command list
 		{
 			// Default state
@@ -888,7 +900,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																											view_attrs.id,
 																											view_tex_albedo.id,
 																											view_tex_normal.id,
-																											view_tex_rough.id
+																											view_tex_rough.id,
+																											view_ao.id
 																										}), 0);
 				
 				auto view_indices = get_index_buffer_view(indices_static);

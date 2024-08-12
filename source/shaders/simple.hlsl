@@ -54,7 +54,7 @@ static const float 	g_PI 						= 3.141592;
 static const float 	g_epsilon 			= 0.00001;
 static const float3 g_f0_dielectric = 0.04; //TODO: reparametrization, see filament & frostbite
 
-static const float exposure  = 3.0; //TODO: make it from app, later automatic
+static const float exposure  = 4.5; //TODO: make it from app, later automatic
 static const float white_point = 1.0; //TODO: make it from app, later automatic
 
 #include "../source/shaders/pbr_functions.hlsli"
@@ -66,9 +66,11 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	Texture2D<float4>albedo_tex = ResourceDescriptorHeap[cb_draw_ids.albedo_id];
 	Texture2D<float4>normal_tex = ResourceDescriptorHeap[cb_draw_ids.normal_id];
 	Texture2D<float4>rough_tex 	= ResourceDescriptorHeap[cb_draw_ids.rough_id];
+	Texture2D<float4>ao_tex 	= ResourceDescriptorHeap[cb_draw_ids.ao_id];
 	
 	const float3x3 obj_to_world = (float3x3)cb_per_draw.obj_to_world;
 	const float2 met_rough 			= rough_tex.Sample(sam_linear, inp.uv).gb;
+	const float3 ao 						= ao_tex.Sample(sam_linear, inp.uv).rgb;
 	
 	const float3 albedo 				= albedo_tex.Sample(sam_linear, inp.uv).rgb;
 	const float metallic 				= met_rough.y;
@@ -115,7 +117,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	//float3 col = pow(normal_t * 0.5f + 0.5f, 2.2);
 	
 	float3 indirect_radiance = 0.0;
-	float3 output_radiance = direct_radiance + indirect_radiance;
+	float3 output_radiance = (direct_radiance + indirect_radiance) * ao;
 	
 	float3 out_color = tonemap_ACES(output_radiance * exposure);
 	
