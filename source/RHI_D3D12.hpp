@@ -67,6 +67,7 @@ struct Texture
 	DXGI_FORMAT format;
 	u32 width;
 	u32 height;
+	u16 mips;
 };
 
 struct Pipeline
@@ -123,6 +124,9 @@ struct RHI_State
 	Texture normal_static;
 	Texture rough_static;
 	Texture ao_static;
+	
+	Texture env;
+	Texture env_irr;
 	
 	Pipeline static_pso;
 };

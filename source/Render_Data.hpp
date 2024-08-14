@@ -27,7 +27,6 @@ struct Data_To_RHI
 	Image_View st_albedo;
 	Image_View st_normal;
 	Image_View st_roughness;
-	Image_View st_enviro;
 	Image_View st_ao;
 	
 	const wchar_t* shader_path;

@@ -13,11 +13,11 @@
 		<RebuildCommand>$(RootWorkspaceDirectory)/build.bat  -$(Configuration)</RebuildCommand>
 		<BuildFileCommand>$(RootWorkspaceDirectory)/build.bat  -$(Configuration) -Hot</BuildFileCommand>
 		<CleanCommand>$(RootWorkspaceDirectory)/build.bat -$(Configuration)</CleanCommand>
-		<BuildWorkingDirectory></BuildWorkingDirectory>
+		<BuildWorkingDirectory>$(RootWorkspaceDirectory)/</BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
 		<Exe>$(RootWorkspaceDirectory)/build/DeRex12.exe</Exe>
 		<Args></Args>
-		<WorkingDirectory>$(RootWorkspaceDirectory)/build/</WorkingDirectory>
+		<WorkingDirectory>$(RootWorkspaceDirectory)/build</WorkingDirectory>
 		<DebugCommand></DebugCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
@@ -43,7 +43,6 @@
 			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um</AdditionalIncludePath>
 			<AdditionalIncludePath>$(RootWorkspaceDirectory)/my_lib/</AdditionalIncludePath>
 			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22000.0\\um\\</AdditionalIncludePath>
-			<AdditionalIncludePath>$(RootWorkspaceDirectory)/external/DDSTextureLoader</AdditionalIncludePath>
 		</AdditionalIncludePaths>
 		<Defines>
 			<Define>RHI_D3D12</Define>

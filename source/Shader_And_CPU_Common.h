@@ -10,10 +10,14 @@ struct Draw_Ids
 {
 	u32 pos_id;
 	u32 attr_id;
+	
 	u32 albedo_id;
 	u32 normal_id;
 	u32 rough_id;
 	u32 ao_id;
+	
+	u32 env_id;
+	u32 env_irr_id;
 };
 
 

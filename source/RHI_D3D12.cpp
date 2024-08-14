@@ -300,9 +300,9 @@ namespace DX
 		return (u16)out;
 	}
 	
-	internal Texture create_texture(ID3D12Device2* device, Image_View img, u16 depth = 1, u16 mips = 0)
+	internal Texture create_texture(ID3D12Device2* device, Image_View img, u16 arr_size = 1, u16 mips = 0)
 	{
-		assert(depth == 1 || depth == 6);
+		assert(arr_size == 1 || arr_size == 6);
 		
 		Texture out {
 			.format = (DXGI_FORMAT)img.format,
@@ -311,7 +311,7 @@ namespace DX
 		};
 		
 		u16 mip_levels = (mips > 0) ? mips : calc_mips(img.width, img.height);
-		D3D12_RESOURCE_DESC desc = 	CD3DX12_RESOURCE_DESC::Tex2D(out.format, out.width, out.height, depth, mip_levels);
+		D3D12_RESOURCE_DESC desc = 	CD3DX12_RESOURCE_DESC::Tex2D(out.format, out.width, out.height, arr_size, mip_levels);
 		THR(device->CreateCommittedResource(get_cptr(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 																				D3D12_HEAP_FLAG_NONE,
 																				&desc,
@@ -336,7 +336,8 @@ namespace DX
 	} 
 	
 	internal void push_texture_to_default(ID3D12Device2* device, Context* ctx, Texture* tex, 
-																Upload_Heap* upload, Memory_View mem, D3D12_RESOURCE_STATES end_state,
+																				Upload_Heap* upload, Memory_View mem, 
+																				D3D12_RESOURCE_STATES end_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
 																u32 num_subresources = 0)
 	{
 		// Assumed that subresources offsets and row sizes in mem are the same as from Footprints and no subresources depth
@@ -385,12 +386,50 @@ namespace DX
 				.SubresourceIndex = 0
 		}),0,0,0,
 			&src, nullptr );
-		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition
-																																							(tex->ptr, 
+		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition(tex->ptr, 
 																																							 D3D12_RESOURCE_STATE_COPY_DEST, 
 																																							 end_state)));
 		tex->state = end_state;
-	} 
+	}
+	
+	//TODO: temporary function that handles all uplaoding to default of .dds straight from disk
+	[[nodiscard]]
+	internal Texture load_and_push_dds(ID3D12Device2* device, Context* ctx, const wchar_t* path, 
+																		 D3D12_RESOURCE_STATES end_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE )
+	{
+		Texture out{};
+		
+		ID3D12Resource* tex;
+		std::unique_ptr<uint8_t[]> dds_data;
+		std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+		THR( DirectX::LoadDDSTextureFromFile(device, path, &tex, dds_data, subresources));
+	
+		const u64 upload_size = GetRequiredIntermediateSize(tex, 0, (u32)(subresources.size()));
+
+		// Create temporary upload heap
+		CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
+		auto desc = CD3DX12_RESOURCE_DESC::Buffer(upload_size);
+		ID3D12Resource* temp_upload_heap;
+		THR( device->CreateCommittedResource( &heapProps,
+																					D3D12_HEAP_FLAG_NONE,
+																					&desc,
+																					D3D12_RESOURCE_STATE_GENERIC_READ,
+																					nullptr,
+																					IID_PPV_ARGS(&temp_upload_heap)));
+		
+		// Push to default
+		UpdateSubresources(ctx->cmd_list, tex, temp_upload_heap,
+											 0, 0, (u32)(subresources.size()), subresources.data());
+		
+		auto res_desc = tex->GetDesc();
+		
+		out = { tex, end_state, res_desc.Format, (u32)res_desc.Width, (u32)res_desc.Height, res_desc.MipLevels };
+		
+		ctx->cmd_list->ResourceBarrier(1, get_cptr(CD3DX12_RESOURCE_BARRIER::Transition(out.ptr, 
+																																								D3D12_RESOURCE_STATE_COPY_DEST, 
+																																								end_state)));
+		return out;
+	}
 	
 	[[nodiscard]]
 	internal Descriptor_Heap create_descriptor_heap(ID3D12Device2* device, u32 count_descriptors, 
@@ -686,6 +725,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& rough_static 		= g_state.rough_static;
 	auto& ao_static 			= g_state.ao_static;
 	
+	auto& env 						= g_state.env;
+	auto& env_irr 				= g_state.env_irr;
+	
 	auto& static_pso 			= g_state.static_pso;
 	
 	auto* upload_heap = &g_state.upload_heaps[frame_index];
@@ -709,17 +751,20 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		
 		// Create & push albedo
 		albedo_static = create_texture(device, data_from_app->st_albedo, 1, 1);
-		push_texture_to_default(device, ctx, &albedo_static, upload_heap, data_from_app->st_albedo.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		push_texture_to_default(device, ctx, &albedo_static, upload_heap, data_from_app->st_albedo.mem);
 		// Create & push normal
 		normal_static = create_texture(device, data_from_app->st_normal, 1, 1);
-		push_texture_to_default(device, ctx, &normal_static, upload_heap, data_from_app->st_normal.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		push_texture_to_default(device, ctx, &normal_static, upload_heap, data_from_app->st_normal.mem);
 		// Create & push roughness
 		rough_static = create_texture(device, data_from_app->st_roughness, 1, 1);
-		push_texture_to_default(device, ctx, &rough_static, upload_heap, data_from_app->st_roughness.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		push_texture_to_default(device, ctx, &rough_static, upload_heap, data_from_app->st_roughness.mem);
 		// Create & push ambient occlusion
 		ao_static = create_texture(device, data_from_app->st_ao, 1, 1);
-		push_texture_to_default(device, ctx, &ao_static, upload_heap, data_from_app->st_ao.mem, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
+		push_texture_to_default(device, ctx, &ao_static, upload_heap, data_from_app->st_ao.mem);
+		
+		env = load_and_push_dds(device, ctx, L"../assets/resting.dds");
+		env_irr = load_and_push_dds(device, ctx, L"../assets/resting_IR.dds");
+		
 		execute_and_wait(ctx);
 	}
 	
@@ -881,6 +926,22 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																										 .Texture2D = {.MipLevels = 1}
 																									 });
 		
+		Resource_View view_env = push_descriptor(device, cbv_srv_uav_heap, env.ptr, 
+																						{
+																							.Format = env.format,
+																							.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+																							.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																							.TextureCube = {.MipLevels = env.mips}
+																						});
+		
+		Resource_View view_env_irr = push_descriptor(device, cbv_srv_uav_heap, env_irr.ptr, 
+																						 {
+																							 .Format = env_irr.format,
+																							 .ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+																							 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+																							 .TextureCube = {.MipLevels = env_irr.mips}
+																						 });
+		
 		// Populate command list
 		{
 			// Default state
@@ -903,7 +964,9 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 																											view_tex_albedo.id,
 																											view_tex_normal.id,
 																											view_tex_rough.id,
-																											view_ao.id
+																											view_ao.id,
+																											view_env.id,
+																											view_env_irr.id
 																										}), 0);
 				
 				auto view_indices = get_index_buffer_view(indices_static);

@@ -54,7 +54,7 @@ static const float 	g_PI 						= 3.141592;
 static const float 	g_epsilon 			= 0.00001;
 static const float3 g_f0_dielectric = 0.04; //TODO: reparametrization, see filament & frostbite
 
-static const float exposure  = 4.5; //TODO: make it from app, later automatic
+static const float exposure  = 3.7; //TODO: make it from app, later automatic
 static const float white_point = 1.0; //TODO: make it from app, later automatic
 
 #include "../source/shaders/pbr_functions.hlsli"
@@ -67,6 +67,9 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	Texture2D<float4>normal_tex = ResourceDescriptorHeap[cb_draw_ids.normal_id];
 	Texture2D<float4>rough_tex 	= ResourceDescriptorHeap[cb_draw_ids.rough_id];
 	Texture2D<float4>ao_tex 		= ResourceDescriptorHeap[cb_draw_ids.ao_id];
+	
+	TextureCube<float4>env_tex 			= ResourceDescriptorHeap[cb_draw_ids.env_id];
+	TextureCube<float4>env_irr_tex 	= ResourceDescriptorHeap[cb_draw_ids.env_irr_id];
 	
 	const float3x3 obj_to_world = (float3x3)cb_per_draw.obj_to_world;
 	const float2 met_rough 			= rough_tex.Sample(sam_linear, inp.uv).gb;
@@ -106,7 +109,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		float3	F 	= fresnel_shlick(g_f0_dielectric, loh);
 		float		D 	= ndf_ggx(noh, roughness);
 		float		V 	= geo_smith_ggx_correlated(nol, nov, roughness);
-		float3 kd 	= lerp(float3(1,1,1) - F, float3(0,0,0), metallic);
+		float3 kd 	= lerp(1.0 - F, 0.0, metallic);
 		
 		float3 diffuse 	= kd * albedo;
 		float3 specular = F*(D*V);
@@ -117,7 +120,30 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	//float3 col = pow(normal_t * 0.5f + 0.5f, 2.2);
 	
 	float3 indirect_radiance = 0.0;
-	float3 output_radiance = (direct_radiance + indirect_radiance) * ao;
+	{
+		u32 count_mips = 0;
+		{
+			u32 width, height;
+			env_tex.GetDimensions(0, width, height, count_mips);
+		}
+		
+		float3 diffuse_irradiance = env_irr_tex.Sample(sam_linear, normal_t).rgb;
+		float3 F 									= fresnel_shlick(g_f0_dielectric, nov);
+		float3 kd 								= lerp(1.0 - F, 0.0, metallic);
+		
+		float3 diffuse_ibl = kd * albedo * diffuse_irradiance;
+		
+		float3 r_vec = reflect(-view_dir, normal_t);
+		float mip = mip_from_roughness(roughness, count_mips);
+		//float mip2 = roughness * count_mips;
+		
+		float3 specular_irradiance = env_tex.SampleLevel(sam_linear, r_vec, mip).rgb;
+		
+		float3 specular_ibl = specular_irradiance * env_brdf_approx(g_f0_dielectric, nov, roughness);
+		
+		indirect_radiance = specular_ibl + diffuse_ibl;
+	}
+	float3 output_radiance = (indirect_radiance) * ao;
 	
 	float3 out_color = tonemap_khronos(output_radiance * exposure);
 	
