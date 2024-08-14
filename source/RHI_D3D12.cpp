@@ -27,10 +27,12 @@
 #define NOMINMAX
 
 #include "RHI_D3D12.hpp"
-#include <dxcapi.h>       
-#include <d3d12shader.h>
+#include "../external/dxc/dxcapi.h"       
+#include "../external/dxc/d3d12shader.h"
 
 #include "Render_Data.hpp"
+
+#include "DDSTextureLoader12.cpp"
 
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 611;}
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "..\\external\\D3D12\\"; }
