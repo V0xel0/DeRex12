@@ -54,7 +54,7 @@ static const float 	g_PI 						= 3.141592;
 static const float 	g_epsilon 			= 0.00001;
 static const float3 g_f0_dielectric = 0.04; //TODO: reparametrization, see filament & frostbite
 
-static const float exposure  = 3.7; //TODO: make it from app, later automatic
+static const float exposure  = 5.7; //TODO: make it from app, later automatic
 static const float white_point = 1.0; //TODO: make it from app, later automatic
 
 #include "../source/shaders/pbr_functions.hlsli"
