@@ -26,7 +26,8 @@ float3 fresnel_shlick(float3 f0, float nox)
 
 float3 fresnel_shlick_rough(float3 f0, float nox, float roughness) 
 {
-	return f0 + (max(1.0f - roughness, f0) - f0) * pow(1.0f - nox, 5.0f);
+	float3 fr = max( 1.0 - roughness, f0) - f0;
+	return f0 + fr * pow(1.0 - nox, 5.0);
 }
 
 // from: https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile

@@ -54,7 +54,7 @@ static const float 	g_PI 						= 3.141592;
 static const float 	g_epsilon 			= 0.00001;
 static const float3 g_f0_dielectric = 0.04; //TODO: reparametrization, see filament & frostbite
 
-static const float exposure  = 5.7; //TODO: make it from app, later automatic
+static const float exposure  = 4.4; //TODO: make it from app, later automatic
 static const float white_point = 1.0; //TODO: make it from app, later automatic
 
 #include "../source/shaders/pbr_functions.hlsli"
@@ -92,7 +92,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	float3 f0 = lerp(g_f0_dielectric, albedo, metallic);
 	
 	float3 direct_radiance = 0.0;
-	float3 debug = 0.0;
+	//float3 debug = 0.0;
 	for(uint i = 0; i < 2; ++i)
 	{
 		//TODO: point light asssumed
@@ -106,7 +106,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		float noh = saturate(dot(normal_t, halfway));
 		float loh = saturate(dot(light_i, halfway));
 		
-		float3	F 	= fresnel_shlick(g_f0_dielectric, loh);
+		float3	F 	= fresnel_shlick(f0, loh);
 		float		D 	= ndf_ggx(noh, roughness);
 		float		V 	= geo_smith_ggx_correlated(nol, nov, roughness);
 		float3 kd 	= lerp(1.0 - F, 0.0, metallic);
@@ -114,7 +114,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		float3 diffuse 	= kd * albedo;
 		float3 specular = F*(D*V);
 		
-		debug += float3(nol,nol,nol);
+		//debug += float3(nol,nol,nol);
 		direct_radiance += (diffuse + specular) * radiance * nol;
 	}
 	//float3 col = pow(normal_t * 0.5f + 0.5f, 2.2);
@@ -128,7 +128,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		}
 		
 		float3 diffuse_irradiance = env_irr_tex.Sample(sam_linear, normal_t).rgb;
-		float3 F 									= fresnel_shlick(g_f0_dielectric, nov);
+		float3 F 									= fresnel_shlick_rough(f0, nov, roughness);
 		float3 kd 								= lerp(1.0 - F, 0.0, metallic);
 		
 		float3 diffuse_ibl = kd * albedo * diffuse_irradiance;
@@ -139,7 +139,7 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		
 		float3 specular_irradiance = env_tex.SampleLevel(sam_linear, r_vec, mip).rgb;
 		
-		float3 specular_ibl = specular_irradiance * env_brdf_approx(g_f0_dielectric, nov, roughness);
+		float3 specular_ibl = specular_irradiance * env_brdf_approx(f0, nov, roughness);
 		
 		indirect_radiance = specular_ibl + diffuse_ibl;
 	}
