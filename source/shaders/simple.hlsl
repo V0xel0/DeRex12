@@ -77,7 +77,8 @@ float4 PSMain(PSInput inp) : SV_TARGET
 	
 	const float3 albedo 				= albedo_tex.Sample(sam_linear, inp.uv).rgb;
 	const float metallic 				= met_rough.y;
-	const float roughness 			= met_rough.x;
+	const float roughness 			= max(0.045, met_rough.x);
+	const float roughness_sq 		= max(0.002025, roughness * roughness);
 	
 	float3 normal 		= normalize(inp.normal);
 	float3 tangent 		= normalize(inp.tangent.xyz);
@@ -107,8 +108,8 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		float loh = saturate(dot(light_i, halfway));
 		
 		float3	F 	= fresnel_shlick(f0, loh);
-		float		D 	= ndf_ggx(noh, roughness);
-		float		V 	= geo_smith_ggx_correlated(nol, nov, roughness);
+		float		D 	= ndf_ggx(noh, roughness_sq);
+		float		V 	= geo_smith_ggx_correlated(nol, nov, roughness_sq);
 		float3 kd 	= lerp(1.0 - F, 0.0, metallic);
 		
 		float3 diffuse 	= kd * albedo;
@@ -143,6 +144,8 @@ float4 PSMain(PSInput inp) : SV_TARGET
 		
 		indirect_radiance = specular_ibl + diffuse_ibl;
 	}
+	//TODO: ambient occlusion term should be different for specular and diffuse and also
+	// 			it should only affect indirect light (see: filament)
 	float3 output_radiance = (indirect_radiance) * ao;
 	
 	float3 out_color = tonemap_khronos(output_radiance * exposure);

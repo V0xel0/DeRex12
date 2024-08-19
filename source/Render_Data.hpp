@@ -17,7 +17,7 @@ struct Geometry
 {
 	Memory_View indices;
 	Memory_View positions;
-	Array_View<Attributes> attributes;
+	Array_View<Attributes> attributes; // this can be Memory_View when passed to RHI
 };
 
 struct Data_To_RHI

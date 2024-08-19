@@ -242,7 +242,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		                                                   (f32)window->width/window->height, 
 		                                                   0.1f, 
 		                                                   100.0f);
-		lib::Mat4 mat_model = mat_trans  * mat_scale;
+		lib::Mat4 mat_model = mat_trans * mat_scale;
 		
 		// Pushing data
 		{
