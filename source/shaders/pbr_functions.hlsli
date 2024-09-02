@@ -30,7 +30,7 @@ float3 fresnel_shlick_rough(float3 f0, float nox, float roughness)
 }
 
 // from: https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
-float3 env_brdf_approx(float3 f0, float3 nov, float roughness)
+float3 env_brdf_approx(float3 f0, float nov, float roughness)
 {
 	float4 c0 = float4(-1.0, -0.0275, -0.572, 0.022);
 	float4 c1 = float4(1.0, 0.0425, 1.04, -0.04);

@@ -162,7 +162,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		data_to_rhi->st_roughness = lvl_tex_rough;
 		data_to_rhi->st_ao = lvl_tex_ao;
 		
-		data_to_rhi->shader_path = L"../source/shaders/simple.hlsl";
+		data_to_rhi->shader_path = L"../source/shaders/default_ibl.hlsl";
 		
 		app_state->camera = { .pos = { 0.0f, 1.0f, 20.0f }, .yaw = -PI32 / 2.0f , .fov = 50.0f };
 		
@@ -267,6 +267,7 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 			{
 				draw_consts->obj_to_world = mat_model;
 				draw_consts->world_to_clip = mat_projection * mat_view;
+				draw_consts->clip_to_world = lib::inverse(draw_consts->world_to_clip);
 			
 				data_to_rhi->cb_frame = { .data = frame_consts, .bytes = sizeof(*frame_consts) };
 				data_to_rhi->cb_draw  = { .data = draw_consts, .bytes = sizeof(*draw_consts)  };

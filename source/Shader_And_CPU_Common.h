@@ -1,8 +1,13 @@
 #pragma once
 
 #ifdef __cplusplus
+
 #include "Math.hpp"
 using namespace lib;
+#define AlignedConstantStruct struct alignas(256)
+#else
+#define AlignedConstantStruct struct
+
 #endif
 
 //============================ RHI -> Shader ============================
@@ -39,7 +44,7 @@ struct Attributes
 	Vec4 uv;
 };
 
-struct Constant_Data_Frame
+AlignedConstantStruct Constant_Data_Frame
 {
 	struct 
 	{
@@ -49,8 +54,10 @@ struct Constant_Data_Frame
 	Vec4 view_pos;
 };
 
-struct Constant_Data_Draw
+AlignedConstantStruct Constant_Data_Draw
 {
 	Mat4 obj_to_world;
 	Mat4 world_to_clip;
+	
+	Mat4 clip_to_world; // only used in skybox for now
 };

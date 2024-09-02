@@ -128,5 +128,5 @@ struct RHI_State
 	Texture env;
 	Texture env_irr;
 	
-	Pipeline static_pso;
+	Pipeline default_pso;
 };

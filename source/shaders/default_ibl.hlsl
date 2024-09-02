@@ -1,19 +1,6 @@
 #include "../source/shaders/aliases.hlsli"
 #include "../source/Shader_And_CPU_Common.h"
-
-#define RootSignatureBasic \
-"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED), " \
-"RootConstants(b0, num32BitConstants=16, visibility = SHADER_VISIBILITY_ALL), " \
-"CBV(b1, visibility = SHADER_VISIBILITY_ALL)," \
-"CBV(b2, visibility = SHADER_VISIBILITY_PIXEL)," \
-"StaticSampler(" \
-"   s0, " \
-"   filter = FILTER_ANISOTROPIC, " \
-"   maxAnisotropy = 16, " \
-"   visibility = SHADER_VISIBILITY_PIXEL" \
-")"
-
-SamplerState sam_linear : register(s0);
+#include "../source/shaders/common_root_signature.hlsli"
 
 ConstantBuffer<Draw_Ids>						cb_draw_ids 	: register(b0);
 ConstantBuffer<Constant_Data_Draw>	cb_per_draw 	: register(b1);
@@ -21,14 +8,14 @@ ConstantBuffer<Constant_Data_Frame>	cb_per_frame 	: register(b2);
 
 struct PSInput
 {
-	float4 pos_ndc : SV_POSITION;
-	float3 pos : POSITION;
-	float4 tangent : TANGENT;
-	float3 normal : NORMAL;
-	float2 uv : TEXCOORD;
+	float4 pos_ndc 	: SV_POSITION;
+	float3 pos 			: POSITION;
+	float4 tangent 	: TANGENT;
+	float3 normal 	: NORMAL;
+	float2 uv 			: TEXCOORD;
 };
 
-[RootSignature(RootSignatureBasic)]
+[RootSignature(RootSignatureCommon)]
 PSInput VSMain(uint vertex_id : SV_VertexID)
 {
 	PSInput result;
@@ -60,7 +47,7 @@ static const float white_point = 1.0; //TODO: make it from app, later automatic
 #include "../source/shaders/pbr_functions.hlsli"
 #include "../source/shaders/tonemappers.hlsli"
 
-[RootSignature(RootSignatureBasic)]
+[RootSignature(RootSignatureCommon)]
 float4 PSMain(PSInput inp) : SV_TARGET
 {
 	Texture2D<float4>albedo_tex = ResourceDescriptorHeap[cb_draw_ids.albedo_id];
