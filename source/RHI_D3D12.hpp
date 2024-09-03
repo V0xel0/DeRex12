@@ -129,4 +129,5 @@ struct RHI_State
 	Texture env_irr;
 	
 	Pipeline default_pso;
+	Pipeline skybox_pso;
 };

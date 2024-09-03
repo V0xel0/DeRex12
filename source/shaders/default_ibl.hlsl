@@ -2,10 +2,6 @@
 #include "../source/Shader_And_CPU_Common.h"
 #include "../source/shaders/common_root_signature.hlsli"
 
-ConstantBuffer<Draw_Ids>						cb_draw_ids 	: register(b0);
-ConstantBuffer<Constant_Data_Draw>	cb_per_draw 	: register(b1);
-ConstantBuffer<Constant_Data_Frame>	cb_per_frame 	: register(b2);
-
 struct PSInput
 {
 	float4 pos_ndc 	: SV_POSITION;

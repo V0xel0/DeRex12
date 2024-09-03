@@ -726,6 +726,7 @@ namespace DX
 			pso_desc.VS = { vertex_shader->GetBufferPointer(), vertex_shader->GetBufferSize() };
 			pso_desc.PS = { pixel_shader->GetBufferPointer(),  pixel_shader->GetBufferSize() };
 			pso_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+			
 			// For RH coordinate system, CCW winding order is needed
 			pso_desc.RasterizerState.FrontCounterClockwise = TRUE;
 			
@@ -773,6 +774,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 	auto& env_irr 				= g_state.env_irr;
 	
 	auto& default_pso 		= g_state.default_pso;
+	auto& skybox_pso 			= g_state.skybox_pso;
 	
 	auto* upload_heap = &g_state.upload_heaps[frame_index];
 
@@ -783,6 +785,7 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 		
 		// Create static shaders & psos
 		default_pso = create_render_pipeline(device, data_from_app->shader_path);
+		skybox_pso = create_render_pipeline(device, L"../source/shaders/skybox.hlsl");
 		
 		// Create & push static buffers
 		vertices_static = create_buffer(device, data_from_app->st_geo.positions);
@@ -1021,7 +1024,8 @@ extern void rhi_run(Data_To_RHI* data_from_app, Game_Window* window)
 			
 			// Drawing skybox
 			{
-				//ctx->cmd_list->SetPipelineState(static_pso);
+				ctx->cmd_list->SetPipelineState(skybox_pso.pso);
+				ctx->cmd_list->DrawInstanced(3, 1, 0, 0);
 			}
 		}
 			

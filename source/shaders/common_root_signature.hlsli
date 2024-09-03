@@ -11,3 +11,7 @@
 ")"
 
 SamplerState sam_linear : register(s0);
+
+ConstantBuffer<Draw_Ids>						cb_draw_ids 	: register(b0);
+ConstantBuffer<Constant_Data_Draw>	cb_per_draw 	: register(b1);
+ConstantBuffer<Constant_Data_Frame>	cb_per_frame 	: register(b2);
