@@ -99,6 +99,10 @@ Geometry load_geometry_from_gltf(const char* file_path, Alloc_Arena* arena_to_pu
 		}
 	}
 	
+	AlwaysAssert(temp_normals.data 	!= nullptr && "No normals loaded!");
+	AlwaysAssert(temp_tangents.data != nullptr && "No tangents loaded!");
+	AlwaysAssert(temp_uvs.data 			!= nullptr && "No uvs loaded!");
+	
 	s32 vertex_count = (s32)(out.positions.bytes / out.positions.stride);
 	out.attributes.init(arena_to_push, vertex_count);
 	
@@ -145,14 +149,14 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 		//TODO: get URI for textures from gltf
 		//TODO: temporarily not holding it anywhere
 		//TODO: async loading
-		Geometry lvl_geo = load_geometry_from_gltf("../assets/meshes/scifihelmet/SciFiHelmet.gltf", &app_state->arena_assets, &app_state->arena_frame);
+		Geometry lvl_geo = load_geometry_from_gltf("../assets/meshes/damagedhelmet/DamagedHelmet.gltf", &app_state->arena_assets, &app_state->arena_frame);
 		
 		//TODO: compress and save as .dds - maybe do compression in RHI?
 		//TODO: material abstraction that hold indexes to textures
-		Image_View lvl_tex_albedo = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_BaseColor.png", &app_state->arena_assets, true);
-		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_Normal.png", &app_state->arena_assets, false);
-		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_MetallicRoughness.png", &app_state->arena_assets, false);
-		Image_View lvl_tex_ao = memory->os_api.read_img(L"../assets/meshes/scifihelmet/SciFiHelmet_AmbientOcclusion.png", &app_state->arena_assets, true);
+		Image_View lvl_tex_albedo = memory->os_api.read_img(L"../assets/meshes/damagedhelmet/albedo.jpg", &app_state->arena_assets, true);
+		Image_View lvl_tex_normal = memory->os_api.read_img(L"../assets/meshes/damagedhelmet/normal.jpg", &app_state->arena_assets, false);
+		Image_View lvl_tex_rough = memory->os_api.read_img(L"../assets/meshes/damagedhelmet/metrough.jpg", &app_state->arena_assets, false);
+		Image_View lvl_tex_ao = memory->os_api.read_img(L"../assets/meshes/damagedhelmet/ao.jpg", &app_state->arena_assets, true);
 			
 		// Sending static geometric data to RHI
 		data_to_rhi->st_geo = lvl_geo;
@@ -255,8 +259,8 @@ extern "C" Data_To_RHI* app_full_update(Game_Memory *memory, Game_Window *window
 				frame_consts->lights[1].pos = {	-90, -40, -10, 0.0f};
 				frame_consts->lights[2].pos = {	-5, -10, -15, 0.0f};
 				frame_consts->lights[3].pos = {	13, 15, 15, 0.0f};
-				frame_consts->lights[0].radiance = { 0.9f, 0.9f, 0.9f, 200.0f };
-				frame_consts->lights[1].radiance = { 0.9f, 0.9f, 0.9f, 240.0f };
+				frame_consts->lights[0].radiance = { 0.9f, 0.9f, 0.9f, 100.0f };
+				frame_consts->lights[1].radiance = { 0.9f, 0.9f, 0.9f, 120.0f };
 				frame_consts->lights[2].radiance = { 0.9f, 0.9f, 0.9f, 5.0f };
 				frame_consts->lights[3].radiance = { 0.9f, 0.9f, 0.9f, 40.0f };
 				
