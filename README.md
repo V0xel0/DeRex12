@@ -1,2 +1,6 @@
 # DeRex12
- A PBR render engine in DirectX 12
+ A bindless PBR render engine written in C++ and DirectX 12.
+
+# Build
+You should have Microsoft C++ build tools installed (or just typical Visual Studio 2022  C++ installation).
+Just call provided build.bat thorugh x64 "Native Tools Command Prompt for VS" (type "native" in windows search).
