@@ -3,4 +3,4 @@
 
 # Build
 You should have Microsoft C++ build tools installed (or just typical Visual Studio 2022  C++ installation).
-Just call provided build.bat thorugh x64 "Native Tools Command Prompt for VS" (type "native" in windows search).
+Just call provided build.bat through x64 "Native Tools Command Prompt for VS" (type "native" in windows search).
